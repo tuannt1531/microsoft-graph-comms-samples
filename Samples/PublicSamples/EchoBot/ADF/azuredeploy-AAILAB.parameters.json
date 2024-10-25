@@ -26,7 +26,7 @@
         "VNet": 1,
         "VNetPeering": 0,
         "LB": 1,
-        "BastionHost": 0,
+        "BastionHost": 1,
         "VMSS": 1,
         "SetExternalDNS": 1,
         "SetInternalDNS": 1
