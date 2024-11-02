@@ -26,7 +26,7 @@
         "VNet": 1,
         "VNetPeering": 0,
         "LB": 1,
-        "BastionHost": 1,
+        "BastionHost": 0,
         "VMSS": 1,
         "SetExternalDNS": 1,
         "SetInternalDNS": 1
@@ -141,6 +141,13 @@
               }
             ]
           }
+          // {
+          //   "name": "AzureBastionSubnet",
+          //   "prefix": "96/27",
+          //   "NSG": 1,
+          //   "FlowLogEnabled": true,
+          //   "FlowAnalyticsEnabled": true
+          // }
         ],
         "BastionInfo": {
           "name": "HST01",
@@ -244,8 +251,7 @@
         "VMSSInfo": [
           {
             "Name": "BOT01",
-            "vmSize": "Standard_A1_v2",
-            "AutoScale": false,
+            "AutoScale": true,
             "PredictiveScale": "Enabled",
             "saname": "data",
             "Role": "BOT",
@@ -274,16 +280,15 @@
               }
             ],
             "AutoScalecapacity": {
-              "minimum": "1",
-              "maximum": "1",
-              "default": "1"
+              "minimum": "2",
+              "maximum": "9",
+              "default": "3"
             },
             "Health": {
               "protocol": "https",
               "port": "9442",
               "requestPath": "/health"
-            },
-            "priority": "Regular"
+            }
           }
         ]
       }

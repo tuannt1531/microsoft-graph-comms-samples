@@ -155,7 +155,7 @@ resource VMSS 'Microsoft.Compute/virtualMachineScaleSets@2021-07-01' = {
     userAssignedIdentities: userAssignedIdentities.Default
   }
   sku: {
-    name: computeSizeLookupOptions['FW-D']
+    name: computeSizeLookupOptions['API-S'] //FW-D
     tier: 'Standard'
     capacity: AppServer.AutoScalecapacity.minimum
   }
