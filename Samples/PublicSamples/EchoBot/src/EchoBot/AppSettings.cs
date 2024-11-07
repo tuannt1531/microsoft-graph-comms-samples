@@ -104,6 +104,12 @@ namespace EchoBot
         /// </summary>
         [Required]
         public string MediaDnsName { get; set; }
+
+        /// <summary>
+        /// Redis connection
+        /// </summary>
+        [Required]
+        public string RedisConnection { get; set; }      
     }
 }
 
