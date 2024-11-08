@@ -34,7 +34,7 @@ namespace EchoBot.Media
             var audioConfig = AudioConfig.FromStreamOutput(_audioOutputStream);
             _synthesizer = new SpeechSynthesizer(_speechConfig, audioConfig);
 
-            this._callId = callId
+            this._callId = callId;
 
             this._redisService = new RedisService(settings.RedisConnection);
         }
@@ -111,7 +111,7 @@ namespace EchoBot.Media
             try
             {
                 
-                var setting = this._redisService.GetSettings(this._callId)
+                var setting = this._redisService.GetSettings(this._callId);
 
                 var stopRecognition = new TaskCompletionSource<int>();
 
