@@ -167,81 +167,11 @@ namespace EchoBot.Media
                 using (var audioInput = AudioConfig.FromStreamInput(_audioInputStream))
                 {
                     // Sử dụng cấu hình phát hiện ngôn ngữ
-                    _translationRecognizer = new TranslationRecognizer(translationConfig, autoDetectSourceLanguageConfig, audioInput);
                     _translationRecognizer2 = new TranslationRecognizer(translationConfig2, autoDetectSourceLanguageConfig, audioInput);
+
+                    _translationRecognizer = new TranslationRecognizer(translationConfig, autoDetectSourceLanguageConfig, audioInput);
                     //_translationRecognizer = new TranslationRecognizer(translationConfig, audioInput);
                 }
-
-                _translationRecognizer.Recognizing += (s, e) =>
-                {
-                    _logger.LogInformation($"RECOGNIZING: {e.Result.Text}");
-                    foreach (var element in e.Result.Translations)
-                    {
-                        _logger.LogInformation($"TRANSLATING into '{element.Key}': {element.Value}");
-                    }
-                };
-
-                _translationRecognizer.Recognized += async (s, e) =>
-                {
-                    if (e.Result.Reason == ResultReason.TranslatedSpeech)
-                    {
-                        _logger.LogInformation($"RECOGNIZED: {e.Result.Text}");
-
-                        // Lấy thông tin ngôn ngữ phát hiện được
-                        var detectedLanguage = e.Result.Properties.GetProperty(PropertyId.SpeechServiceConnection_AutoDetectSourceLanguageResult);
-                        // _logger.LogInformation($"Detected Language: {detectedLanguage}");
-
-                        foreach (var element in e.Result.Translations)
-                        {
-                            _logger.LogInformation($"TRANSLATING into '{element.Key}': {element.Value}");
-                            //await TextToSpeech(element.Value + " and ");
-
-                            //// Chỉ thực hiện Text-to-Speech nếu ngôn ngữ phát hiện được là tiếng Việt
-                            var sourceLanguage = "vi-VN";
-                            if (setting != null) {
-                                _logger.LogInformation($">>>setting: {setting.SourceLanguage} {setting.TargetLanguage}");
-                                sourceLanguage = languageSettingMapping[setting.SourceLanguage][0];
-                            }
-                            _logger.LogInformation($">>>detectedLanguage: {detectedLanguage} - sourceLanguage {sourceLanguage}");
-                            if (detectedLanguage == sourceLanguage)
-                            {
-                                await TextToSpeech(element.Value);
-                            }
-                            else
-                            {
-                                await TextToSpeech(" ");
-                            }
-                        }
-                    }
-                };
-
-                _translationRecognizer.Canceled += (s, e) =>
-                {
-                    _logger.LogInformation($"CANCELED: Reason={e.Reason}");
-                    if (e.Reason == CancellationReason.Error)
-                    {
-                        _logger.LogInformation($"ErrorDetails={e.ErrorDetails}");
-                    }
-                    stopRecognition.TrySetResult(0);
-                };
-
-                _translationRecognizer.SessionStarted += (s, e) =>
-                {
-                    _logger.LogInformation("Session started.");
-                };
-
-                _translationRecognizer.SessionStopped += (s, e) =>
-                {
-                    _logger.LogInformation("Session stopped.");
-                    stopRecognition.TrySetResult(0);
-                };
-
-                await _translationRecognizer.StartContinuousRecognitionAsync().ConfigureAwait(false);
-                Task.WaitAny(new[] { stopRecognition.Task });
-                await _translationRecognizer.StopContinuousRecognitionAsync().ConfigureAwait(false);
-
-
-                
 
                 _translationRecognizer2.Recognizing += (s, e) =>
                 {
@@ -310,6 +240,76 @@ namespace EchoBot.Media
                 await _translationRecognizer2.StartContinuousRecognitionAsync().ConfigureAwait(false);
                 Task.WaitAny(new[] { stopRecognition.Task });
                 await _translationRecognizer2.StopContinuousRecognitionAsync().ConfigureAwait(false);
+
+
+
+                _translationRecognizer.Recognizing += (s, e) =>
+                {
+                    _logger.LogInformation($"RECOGNIZING: {e.Result.Text}");
+                    foreach (var element in e.Result.Translations)
+                    {
+                        _logger.LogInformation($"TRANSLATING into '{element.Key}': {element.Value}");
+                    }
+                };
+
+                _translationRecognizer.Recognized += async (s, e) =>
+                {
+                    if (e.Result.Reason == ResultReason.TranslatedSpeech)
+                    {
+                        _logger.LogInformation($"RECOGNIZED: {e.Result.Text}");
+
+                        // Lấy thông tin ngôn ngữ phát hiện được
+                        var detectedLanguage = e.Result.Properties.GetProperty(PropertyId.SpeechServiceConnection_AutoDetectSourceLanguageResult);
+                        // _logger.LogInformation($"Detected Language: {detectedLanguage}");
+
+                        foreach (var element in e.Result.Translations)
+                        {
+                            _logger.LogInformation($"TRANSLATING into '{element.Key}': {element.Value}");
+                            //await TextToSpeech(element.Value + " and ");
+
+                            //// Chỉ thực hiện Text-to-Speech nếu ngôn ngữ phát hiện được là tiếng Việt
+                            var sourceLanguage = "vi-VN";
+                            if (setting != null) {
+                                _logger.LogInformation($">>>setting: {setting.SourceLanguage} {setting.TargetLanguage}");
+                                sourceLanguage = languageSettingMapping[setting.SourceLanguage][0];
+                            }
+                            _logger.LogInformation($">>>detectedLanguage: {detectedLanguage} - sourceLanguage {sourceLanguage}");
+                            if (detectedLanguage == sourceLanguage)
+                            {
+                                await TextToSpeech(element.Value);
+                            }
+                            else
+                            {
+                                await TextToSpeech(" ");
+                            }
+                        }
+                    }
+                };
+
+                _translationRecognizer.Canceled += (s, e) =>
+                {
+                    _logger.LogInformation($"CANCELED: Reason={e.Reason}");
+                    if (e.Reason == CancellationReason.Error)
+                    {
+                        _logger.LogInformation($"ErrorDetails={e.ErrorDetails}");
+                    }
+                    stopRecognition.TrySetResult(0);
+                };
+
+                _translationRecognizer.SessionStarted += (s, e) =>
+                {
+                    _logger.LogInformation("Session started.");
+                };
+
+                _translationRecognizer.SessionStopped += (s, e) =>
+                {
+                    _logger.LogInformation("Session stopped.");
+                    stopRecognition.TrySetResult(0);
+                };
+
+                await _translationRecognizer.StartContinuousRecognitionAsync().ConfigureAwait(false);
+                Task.WaitAny(new[] { stopRecognition.Task });
+                await _translationRecognizer.StopContinuousRecognitionAsync().ConfigureAwait(false);
             }
             catch (Exception ex)
             {
