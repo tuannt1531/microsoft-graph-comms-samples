@@ -17,9 +17,13 @@ namespace EchoBot.Media
         private readonly SpeechSynthesizer _synthesizer;
         private TranslationRecognizer _translationRecognizer;
 
+        private string _callId;
+
+        private RedisService _redisService;
+
         // public event EventHandler<MediaStreamEventArgs> OnSendMediaBufferEventArgs;
 
-        public SpeechService(AppSettings settings, ILogger logger)
+        public SpeechService(AppSettings settings, ILogger logger, string callId)
         {
             _logger = logger;
 
@@ -29,6 +33,10 @@ namespace EchoBot.Media
 
             var audioConfig = AudioConfig.FromStreamOutput(_audioOutputStream);
             _synthesizer = new SpeechSynthesizer(_speechConfig, audioConfig);
+
+            this._callId = callId
+
+            this._redisService = new RedisService(settings.RedisConnection);
         }
 
         public async Task AppendAudioBuffer(AudioMediaBuffer audioBuffer)
@@ -102,6 +110,10 @@ namespace EchoBot.Media
         {
             try
             {
+                
+                _logger.LogInformation($" >>>>>>>>>> Speech service this.callId: {this.callId} ");
+                
+
                 var stopRecognition = new TaskCompletionSource<int>();
 
                 var translationConfig = SpeechTranslationConfig.FromSubscription(_speechConfig.SubscriptionKey, _speechConfig.Region);

@@ -97,7 +97,7 @@ namespace EchoBot.Bot
 
             if (_settings.UseSpeechService)
             {
-                _languageService = new SpeechService(_settings, _logger);
+                _languageService = new SpeechService(_settings, _logger, callId);
                 _languageService.SendMediaBuffer += this.OnSendMediaBuffer;
             }
         }
