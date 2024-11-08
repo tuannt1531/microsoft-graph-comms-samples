@@ -2,6 +2,7 @@
 using Microsoft.CognitiveServices.Speech.Audio;
 using Microsoft.CognitiveServices.Speech.Translation;
 using Microsoft.Skype.Bots.Media;
+using Sprache;
 using System.Runtime.InteropServices;
 
 namespace EchoBot.Media
@@ -26,6 +27,8 @@ namespace EchoBot.Media
             _speechConfig = SpeechConfig.FromSubscription(settings.SpeechConfigKey, settings.SpeechConfigRegion);
             _speechConfig.SpeechSynthesisLanguage = settings.BotLanguage;
             _speechConfig.SpeechRecognitionLanguage = settings.BotLanguage;
+            //_speechConfig.SpeechSynthesisLanguage = "vi";
+            //_speechConfig.SpeechRecognitionLanguage = "vi";
 
             var audioConfig = AudioConfig.FromStreamOutput(_audioOutputStream);
             _synthesizer = new SpeechSynthesizer(_speechConfig, audioConfig);
@@ -104,14 +107,28 @@ namespace EchoBot.Media
             {
                 var stopRecognition = new TaskCompletionSource<int>();
 
-                var translationConfig = SpeechTranslationConfig.FromSubscription(_speechConfig.SubscriptionKey, _speechConfig.Region);
-                translationConfig.SpeechRecognitionLanguage = _speechConfig.SpeechRecognitionLanguage;
-                translationConfig.AddTargetLanguage("vi");
-                translationConfig.VoiceName = "vi-VN-HoaiMyNeural";
+                var v2EndpointInString = String.Format("wss://{0}.stt.speech.microsoft.com/speech/universal/v2", "eastus");
+                var v2EndpointUrl = new Uri(v2EndpointInString);
+
+                var translationConfig = SpeechTranslationConfig.FromEndpoint(v2EndpointUrl, _speechConfig.SubscriptionKey);
+
+                //var translationConfig = SpeechTranslationConfig.FromSubscription(_speechConfig.SubscriptionKey, _speechConfig.Region);
+                //string serviceRegion = "eastus";
+                //string endpointString = "wss://eastus.stt.speech.microsoft.com/speech/universal/v2";
+                translationConfig.SpeechRecognitionLanguage = "vi-VN";
+                translationConfig.AddTargetLanguage("en");
+                translationConfig.VoiceName = "en-US-JennyNeural";
+                //translationConfig.EndpointId = endpointString;
+                translationConfig.SetProperty(PropertyId.SpeechServiceConnection_LanguageIdMode, "Continuous");
+
+                // Tạo cấu hình tự động phát hiện ngôn ngữ
+                var autoDetectSourceLanguageConfig = AutoDetectSourceLanguageConfig.FromLanguages(new string[] { "vi-VN", "en-US" });
 
                 using (var audioInput = AudioConfig.FromStreamInput(_audioInputStream))
                 {
-                    _translationRecognizer = new TranslationRecognizer(translationConfig, audioInput);
+                    // Sử dụng cấu hình phát hiện ngôn ngữ
+                    _translationRecognizer = new TranslationRecognizer(translationConfig, autoDetectSourceLanguageConfig, audioInput);
+                    //_translationRecognizer = new TranslationRecognizer(translationConfig, audioInput);
                 }
 
                 _translationRecognizer.Recognizing += (s, e) =>
@@ -128,10 +145,26 @@ namespace EchoBot.Media
                     if (e.Result.Reason == ResultReason.TranslatedSpeech)
                     {
                         _logger.LogInformation($"RECOGNIZED: {e.Result.Text}");
+
+                        // Lấy thông tin ngôn ngữ phát hiện được
+                        var detectedLanguage = e.Result.Properties.GetProperty(PropertyId.SpeechServiceConnection_AutoDetectSourceLanguageResult);
+
+                        //_logger.LogInformation($"Detected Language: {detectedLanguage}");
+
                         foreach (var element in e.Result.Translations)
                         {
                             _logger.LogInformation($"TRANSLATING into '{element.Key}': {element.Value}");
-                            await TextToSpeech(element.Value);
+                            //await TextToSpeech(element.Value + " and ");
+
+                            //// Chỉ thực hiện Text-to-Speech nếu ngôn ngữ phát hiện được là tiếng Việt
+                            if (detectedLanguage == "vi-VN")
+                            {
+                                await TextToSpeech(element.Value);
+                            }
+                            else
+                            {
+                                await TextToSpeech(" ");
+                            }
                         }
                     }
                 };
@@ -165,7 +198,7 @@ namespace EchoBot.Media
             {
                 _logger.LogError(ex, "Caught Exception");
             }
-            
+
             _isDraining = false;
         }
 
