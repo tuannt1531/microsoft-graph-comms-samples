@@ -142,7 +142,7 @@ namespace EchoBot.Media
                 translationConfig.SetProperty(PropertyId.SpeechServiceConnection_LanguageIdMode, "Continuous");
 
                 // Tạo cấu hình tự động phát hiện ngôn ngữ
-                var autoDetectSzourceLanguageConfig = AutoDetectSourceLanguageConfig.FromLanguages(new string[] { languageSettingMapping[sourceLanguage][0], languageSettingMapping[targetLanguage][0] });
+                var autoDetectSourceLanguageConfig = AutoDetectSourceLanguageConfig.FromLanguages(new string[] { languageSettingMapping[sourceLanguage][0], languageSettingMapping[targetLanguage][0] });
 
                 using (var audioInput = AudioConfig.FromStreamInput(_audioInputStream))
                 {
