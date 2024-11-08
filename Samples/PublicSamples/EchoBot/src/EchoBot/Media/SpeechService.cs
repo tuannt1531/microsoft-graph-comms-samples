@@ -112,7 +112,7 @@ namespace EchoBot.Media
             try
             {
                 var setting = _redisService.GetSettings(_callId);
-                Dictionary<string, List<string>> languageSettingMapping = new Dictionary<string, string>();
+                Dictionary<string, List<string>> languageSettingMapping = new Dictionary<string, List<string>>();
                 languageSettingMapping["vi"] = new List<string> { "vi-VN", "vi-VN-HoaiMyNeural" };
                 languageSettingMapping["en"] = new List<string> { "en-US", "en-US-JennyNeural" };
                 languageSettingMapping["fr"] = new List<string> { "fr-FR", "fr-FR-DeniseNeural" };
