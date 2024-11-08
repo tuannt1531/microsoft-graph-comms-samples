@@ -2,6 +2,7 @@
 using Microsoft.CognitiveServices.Speech.Audio;
 using Microsoft.CognitiveServices.Speech.Translation;
 using Microsoft.Skype.Bots.Media;
+using Sprache;
 using System.Runtime.InteropServices;
 
 namespace EchoBot.Media
@@ -17,11 +18,10 @@ namespace EchoBot.Media
         private readonly SpeechSynthesizer _synthesizer;
         private TranslationRecognizer _translationRecognizer;
 
-        private string _callId;
-
-        private RedisService _redisService;
-
         // public event EventHandler<MediaStreamEventArgs> OnSendMediaBufferEventArgs;
+
+        private string _callId;
+        private RedisService _redisService;
 
         public SpeechService(AppSettings settings, ILogger logger, string callId)
         {
@@ -30,13 +30,14 @@ namespace EchoBot.Media
             _speechConfig = SpeechConfig.FromSubscription(settings.SpeechConfigKey, settings.SpeechConfigRegion);
             _speechConfig.SpeechSynthesisLanguage = settings.BotLanguage;
             _speechConfig.SpeechRecognitionLanguage = settings.BotLanguage;
+            //_speechConfig.SpeechSynthesisLanguage = "vi";
+            //_speechConfig.SpeechRecognitionLanguage = "vi";
 
             var audioConfig = AudioConfig.FromStreamOutput(_audioOutputStream);
             _synthesizer = new SpeechSynthesizer(_speechConfig, audioConfig);
 
-            this._callId = callId;
-
-            this._redisService = new RedisService(settings.RedisConnection);
+            _callId = callId;
+            _redisService = new RedisService(settings.RedisConnection);
         }
 
         public async Task AppendAudioBuffer(AudioMediaBuffer audioBuffer)
@@ -110,7 +111,7 @@ namespace EchoBot.Media
         {
             try
             {
-                var setting = this._redisService.GetSettings(this._callId);
+                var setting = _redisService.GetSettings(_callId);
                 Dictionary<string, string> languageSettingMapping = new Dictionary<string, string>();
                 languageSettingMapping.Add("vi", "vi-VN");
                 languageSettingMapping.Add("en", "en-US");
@@ -130,6 +131,7 @@ namespace EchoBot.Media
                 //var translationConfig = SpeechTranslationConfig.FromSubscription(_speechConfig.SubscriptionKey, _speechConfig.Region);
                 //string serviceRegion = "eastus";
                 //string endpointString = "wss://eastus.stt.speech.microsoft.com/speech/universal/v2";
+
                 if (setting != null) {
                     _logger.LogInformation($"setting: {setting}");
                     translationConfig.SpeechRecognitionLanguage = languageSettingMapping[setting.SourceLanguage];
@@ -138,11 +140,13 @@ namespace EchoBot.Media
                     translationConfig.SpeechRecognitionLanguage = "vi-VN";
                     translationConfig.AddTargetLanguage("en");
                 }
+
                 translationConfig.VoiceName = "en-US-JennyNeural";
                 //translationConfig.EndpointId = endpointString;
                 translationConfig.SetProperty(PropertyId.SpeechServiceConnection_LanguageIdMode, "Continuous");
 
                 // Tạo cấu hình tự động phát hiện ngôn ngữ
+                // var autoDetectSourceLanguageConfig = AutoDetectSourceLanguageConfig.FromLanguages(new string[] { "vi-VN", "en-US" });
                 var autoDetectSourceLanguageConfig = AutoDetectSourceLanguageConfig.FromLanguages(new string[] { languageSettingMapping[setting.SourceLanguage], languageSettingMapping[setting.TargetLanguage] });
 
                 using (var audioInput = AudioConfig.FromStreamInput(_audioInputStream))
