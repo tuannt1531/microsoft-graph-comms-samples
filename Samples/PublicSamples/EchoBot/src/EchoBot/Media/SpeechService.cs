@@ -187,7 +187,7 @@ namespace EchoBot.Media
                             //// Chỉ thực hiện Text-to-Speech nếu ngôn ngữ phát hiện được là tiếng Việt
                             var sourceLanguage = "vi-VN";
                             if (setting != null) {
-                                sourceLanguage = languageSettingMapping[setting.SourceLanguage][0]
+                                sourceLanguage = languageSettingMapping[setting.SourceLanguage][0];
                             }
                             if (detectedLanguage == sourceLanguage)
                             {
