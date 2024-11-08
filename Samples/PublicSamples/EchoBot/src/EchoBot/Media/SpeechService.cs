@@ -17,7 +17,6 @@ namespace EchoBot.Media
         private readonly SpeechConfig _speechConfig;
         private readonly SpeechSynthesizer _synthesizer;
         private TranslationRecognizer _translationRecognizer;
-        private TranslationRecognizer _translationRecognizer2;
 
         // public event EventHandler<MediaStreamEventArgs> OnSendMediaBufferEventArgs;
 
@@ -90,8 +89,6 @@ namespace EchoBot.Media
             {
                 await _translationRecognizer.StopContinuousRecognitionAsync();
                 _translationRecognizer.Dispose();
-                await _translationRecognizer2.StopContinuousRecognitionAsync();
-                _translationRecognizer2.Dispose();
                 _audioInputStream.Close();
 
                 _audioInputStream.Dispose();
@@ -110,10 +107,11 @@ namespace EchoBot.Media
             }
         }
 
-        public async Task StartTranslationAsync(string sourceLanguage, string targetLanguage) 
+        private async Task ProcessSpeech()
         {
-          try
+            try
             {
+                var setting = _redisService.GetSettings(_callId);
                 Dictionary<string, List<string>> languageSettingMapping = new Dictionary<string, List<string>>();
                 languageSettingMapping["vi"] = new List<string> { "vi-VN", "vi-VN-HoaiMyNeural" };
                 languageSettingMapping["en"] = new List<string> { "en-US", "en-US-JennyNeural" };
@@ -134,15 +132,24 @@ namespace EchoBot.Media
                 //string serviceRegion = "eastus";
                 //string endpointString = "wss://eastus.stt.speech.microsoft.com/speech/universal/v2";
 
-                translationConfig.SpeechRecognitionLanguage = languageSettingMapping[sourceLanguage][0];
-                translationConfig.AddTargetLanguage(targetLanguage);
-                translationConfig.VoiceName = languageSettingMapping[targetLanguage][1];
+                if (setting != null) {
+                    translationConfig.SpeechRecognitionLanguage = languageSettingMapping[setting.SourceLanguage][0];
+                    translationConfig.AddTargetLanguage(setting.TargetLanguage);
+                    translationConfig.VoiceName = languageSettingMapping[setting.TargetLanguage][1];
+                }else {
+                    translationConfig.SpeechRecognitionLanguage = "vi-VN";
+                    translationConfig.AddTargetLanguage("en");
+                    translationConfig.VoiceName = "en-US-JennyNeural";
+                }
                 
                 //translationConfig.EndpointId = endpointString;
                 translationConfig.SetProperty(PropertyId.SpeechServiceConnection_LanguageIdMode, "Continuous");
 
                 // Tạo cấu hình tự động phát hiện ngôn ngữ
-                var autoDetectSourceLanguageConfig = AutoDetectSourceLanguageConfig.FromLanguages(new string[] { languageSettingMapping[sourceLanguage][0], languageSettingMapping[targetLanguage][0] });
+                var autoDetectSourceLanguageConfig = AutoDetectSourceLanguageConfig.FromLanguages(new string[] { "vi-VN", "en-US" });
+                if (setting != null) {
+                    autoDetectSourceLanguageConfig = AutoDetectSourceLanguageConfig.FromLanguages(new string[] { languageSettingMapping[setting.SourceLanguage][0], languageSettingMapping[setting.TargetLanguage][0] });
+                }
 
                 using (var audioInput = AudioConfig.FromStreamInput(_audioInputStream))
                 {
@@ -176,7 +183,11 @@ namespace EchoBot.Media
                             //await TextToSpeech(element.Value + " and ");
 
                             //// Chỉ thực hiện Text-to-Speech nếu ngôn ngữ phát hiện được là tiếng Việt
-                            sourceLanguage = languageSettingMapping[sourceLanguage][0];
+                            var sourceLanguage = "vi-VN";
+                            if (setting != null) {
+                                _logger.LogInformation($">>>setting: {setting.SourceLanguage} {setting.TargetLanguage}");
+                                sourceLanguage = languageSettingMapping[setting.SourceLanguage][0];
+                            }
                             _logger.LogInformation($">>>detectedLanguage: {detectedLanguage} - sourceLanguage {sourceLanguage}");
                             if (detectedLanguage == sourceLanguage)
                             {
@@ -219,18 +230,7 @@ namespace EchoBot.Media
             {
                 _logger.LogError(ex, "Caught Exception");
             }
-        }
 
-        private async Task ProcessSpeech()
-        {
-            var setting = _redisService.GetSettings(_callId);
-            if (setting != null) {
-                    await StartTranslationAsync(setting.SourceLanguage, setting.TargetLanguage)
-                    await StartTranslationAsync(setting.TargetLanguage, setting.SourceLanguage)
-                }else {
-                    await StartTranslationAsync("vi", "en")
-                    await StartTranslationAsync("en", "vi")
-                }
             _isDraining = false;
         }
 
