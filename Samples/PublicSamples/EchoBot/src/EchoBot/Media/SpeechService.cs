@@ -132,11 +132,11 @@ namespace EchoBot.Media
                 //string serviceRegion = "eastus";
                 //string endpointString = "wss://eastus.stt.speech.microsoft.com/speech/universal/v2";
 
+                _logger.LogInformation($">>>setting: {_callId} {setting.SourceLanguage} {setting.TargetLanguage}");
                 if (setting != null) {
-                    _logger.LogInformation($"setting: {setting}");
                     translationConfig.SpeechRecognitionLanguage = languageSettingMapping[setting.SourceLanguage][0];
                     translationConfig.AddTargetLanguage(setting.TargetLanguage);
-                    translationConfig.VoiceName = languageSettingMapping[setting.SourceLanguage][1];
+                    translationConfig.VoiceName = languageSettingMapping[setting.TargetLanguage][1];
                 }else {
                     translationConfig.SpeechRecognitionLanguage = "vi-VN";
                     translationConfig.AddTargetLanguage("en");
@@ -176,8 +176,7 @@ namespace EchoBot.Media
 
                         // Lấy thông tin ngôn ngữ phát hiện được
                         var detectedLanguage = e.Result.Properties.GetProperty(PropertyId.SpeechServiceConnection_AutoDetectSourceLanguageResult);
-
-                        //_logger.LogInformation($"Detected Language: {detectedLanguage}");
+                        // _logger.LogInformation($"Detected Language: {detectedLanguage}");
 
                         foreach (var element in e.Result.Translations)
                         {
@@ -187,8 +186,10 @@ namespace EchoBot.Media
                             //// Chỉ thực hiện Text-to-Speech nếu ngôn ngữ phát hiện được là tiếng Việt
                             var sourceLanguage = "vi-VN";
                             if (setting != null) {
+                                _logger.LogInformation($">>>setting: {setting.SourceLanguage} {setting.TargetLanguage}");
                                 sourceLanguage = languageSettingMapping[setting.SourceLanguage][0];
                             }
+                            _logger.LogInformation($">>>detectedLanguage: {detectedLanguage} - sourceLanguage {sourceLanguage}");
                             if (detectedLanguage == sourceLanguage)
                             {
                                 await TextToSpeech(element.Value);
