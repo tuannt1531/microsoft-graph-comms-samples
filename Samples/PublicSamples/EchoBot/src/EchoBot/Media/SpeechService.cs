@@ -111,14 +111,19 @@ namespace EchoBot.Media
             try
             {
                 
-                _logger.LogInformation($" >>>>>>>>>> Speech service this.callId: {this.callId} ");
-                
+                var setting = this._redisService.GetSettings(this._callId)
 
                 var stopRecognition = new TaskCompletionSource<int>();
 
                 var translationConfig = SpeechTranslationConfig.FromSubscription(_speechConfig.SubscriptionKey, _speechConfig.Region);
                 translationConfig.SpeechRecognitionLanguage = _speechConfig.SpeechRecognitionLanguage;
-                translationConfig.AddTargetLanguage("vi");
+                if (setting != null) {
+                    _logger.LogInformation($"setting: {setting}");
+                    translationConfig.AddTargetLanguage(setting.TargetLanguage);
+                }else {
+                    translationConfig.AddTargetLanguage("vi");
+                }
+                
                 translationConfig.VoiceName = "vi-VN-HoaiMyNeural";
 
                 using (var audioInput = AudioConfig.FromStreamInput(_audioInputStream))
