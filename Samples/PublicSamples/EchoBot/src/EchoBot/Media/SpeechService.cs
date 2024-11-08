@@ -132,7 +132,7 @@ namespace EchoBot.Media
                 //string endpointString = "wss://eastus.stt.speech.microsoft.com/speech/universal/v2";
                 if (setting != null) {
                     _logger.LogInformation($"setting: {setting}");
-                    translationConfig.SpeechRecognitionLanguage = languageSettingMapping.Get(setting.SourceLanguage);
+                    translationConfig.SpeechRecognitionLanguage = languageSettingMapping[setting.SourceLanguage];
                     translationConfig.AddTargetLanguage(setting.TargetLanguage);
                 }else {
                     translationConfig.SpeechRecognitionLanguage = "vi-VN";
@@ -143,7 +143,7 @@ namespace EchoBot.Media
                 translationConfig.SetProperty(PropertyId.SpeechServiceConnection_LanguageIdMode, "Continuous");
 
                 // Tạo cấu hình tự động phát hiện ngôn ngữ
-                var autoDetectSourceLanguageConfig = AutoDetectSourceLanguageConfig.FromLanguages(new string[] { languageSettingMapping.Get(setting.SourceLanguage), languageSettingMapping.Get(setting.TargetLanguage) });
+                var autoDetectSourceLanguageConfig = AutoDetectSourceLanguageConfig.FromLanguages(new string[] { languageSettingMapping[setting.SourceLanguage], languageSettingMapping[setting.TargetLanguage] });
 
                 using (var audioInput = AudioConfig.FromStreamInput(_audioInputStream))
                 {
