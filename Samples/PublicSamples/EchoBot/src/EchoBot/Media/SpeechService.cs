@@ -112,14 +112,14 @@ namespace EchoBot.Media
             try
             {
                 var setting = _redisService.GetSettings(_callId);
-                Dictionary<string, string> languageSettingMapping = new Dictionary<string, string>();
-                languageSettingMapping.Add("vi", "vi-VN");
-                languageSettingMapping.Add("en", "en-US");
-                languageSettingMapping.Add("fr", "fr-FR");
-                languageSettingMapping.Add("zh", "zh-CN");
-                languageSettingMapping.Add("es", "es-ES");
-                languageSettingMapping.Add("de", "de-DE");
-                languageSettingMapping.Add("ja", "ja-JP");
+                Dictionary<string, List<string>> languageSettingMapping = new Dictionary<string, string>();
+                languageSettingMapping["vi"] = new List<string> { "vi-VN", "vi-VN-HoaiMyNeural" };
+                languageSettingMapping["en"] = new List<string> { "en-US", "en-US-JennyNeural" };
+                languageSettingMapping["fr"] = new List<string> { "fr-FR", "fr-FR-DeniseNeural" };
+                languageSettingMapping["zh"] = new List<string> { "zh-CN", "zh-CN-XiaoxiaoNeural" };
+                languageSettingMapping["es"] = new List<string> { "es-ES", "es-ES-ElviraNeural" };
+                languageSettingMapping["de"] = new List<string> { "de-DE", "de-DE-KatjaNeural" };
+                languageSettingMapping["ja"] = new List<string> { "ja-JP", "ja-JP-AoiNeural" };
 
                 var stopRecognition = new TaskCompletionSource<int>();
 
@@ -134,20 +134,23 @@ namespace EchoBot.Media
 
                 if (setting != null) {
                     _logger.LogInformation($"setting: {setting}");
-                    translationConfig.SpeechRecognitionLanguage = languageSettingMapping[setting.SourceLanguage];
+                    translationConfig.SpeechRecognitionLanguage = languageSettingMapping[setting.SourceLanguage][0];
                     translationConfig.AddTargetLanguage(setting.TargetLanguage);
+                    translationConfig.VoiceName = languageSettingMapping[setting.SourceLanguage][1];
                 }else {
                     translationConfig.SpeechRecognitionLanguage = "vi-VN";
                     translationConfig.AddTargetLanguage("en");
+                    translationConfig.VoiceName = "en-US-JennyNeural";
                 }
-
-                translationConfig.VoiceName = "en-US-JennyNeural";
+                
                 //translationConfig.EndpointId = endpointString;
                 translationConfig.SetProperty(PropertyId.SpeechServiceConnection_LanguageIdMode, "Continuous");
 
                 // Tạo cấu hình tự động phát hiện ngôn ngữ
-                // var autoDetectSourceLanguageConfig = AutoDetectSourceLanguageConfig.FromLanguages(new string[] { "vi-VN", "en-US" });
-                var autoDetectSourceLanguageConfig = AutoDetectSourceLanguageConfig.FromLanguages(new string[] { languageSettingMapping[setting.SourceLanguage], languageSettingMapping[setting.TargetLanguage] });
+                var autoDetectSourceLanguageConfig = AutoDetectSourceLanguageConfig.FromLanguages(new string[] { "vi-VN", "en-US" });
+                if (setting != null) {
+                    autoDetectSourceLanguageConfig = AutoDetectSourceLanguageConfig.FromLanguages(new string[] { languageSettingMapping[setting.SourceLanguage][0], languageSettingMapping[setting.TargetLanguage][0] });
+                }
 
                 using (var audioInput = AudioConfig.FromStreamInput(_audioInputStream))
                 {
@@ -182,7 +185,11 @@ namespace EchoBot.Media
                             //await TextToSpeech(element.Value + " and ");
 
                             //// Chỉ thực hiện Text-to-Speech nếu ngôn ngữ phát hiện được là tiếng Việt
-                            if (detectedLanguage == "vi-VN")
+                            var sourceLanguage = "vi-VN"
+                            if (setting != null) {
+                                sourceLanguage = languageSettingMapping[setting.SourceLanguage][0]
+                            }
+                            if (detectedLanguage == sourceLanguage)
                             {
                                 await TextToSpeech(element.Value);
                             }
