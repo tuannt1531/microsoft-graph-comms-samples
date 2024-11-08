@@ -119,9 +119,11 @@ namespace EchoBot.Media
                 translationConfig.SpeechRecognitionLanguage = _speechConfig.SpeechRecognitionLanguage;
                 if (setting != null) {
                     _logger.LogInformation($"setting: {setting}");
+                    translationConfig.AddSourceLanguage(setting.SourceLanguage)
                     translationConfig.AddTargetLanguage(setting.TargetLanguage);
                 }else {
-                    translationConfig.AddTargetLanguage("vi");
+                    translationConfig.AddSourceLanguage("vi");
+                    translationConfig.AddTargetLanguage("en");
                 }
                 
                 translationConfig.VoiceName = "vi-VN-HoaiMyNeural";
