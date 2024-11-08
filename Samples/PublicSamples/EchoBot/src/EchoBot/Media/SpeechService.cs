@@ -17,6 +17,7 @@ namespace EchoBot.Media
         private readonly SpeechConfig _speechConfig;
         private readonly SpeechSynthesizer _synthesizer;
         private TranslationRecognizer _translationRecognizer;
+        private TranslationRecognizer _translationRecognizer2;
 
         // public event EventHandler<MediaStreamEventArgs> OnSendMediaBufferEventArgs;
 
@@ -89,6 +90,8 @@ namespace EchoBot.Media
             {
                 await _translationRecognizer.StopContinuousRecognitionAsync();
                 _translationRecognizer.Dispose();
+                await _translationRecognizer2.StopContinuousRecognitionAsync();
+                _translationRecognizer2.Dispose();
                 _audioInputStream.Close();
 
                 _audioInputStream.Dispose();
