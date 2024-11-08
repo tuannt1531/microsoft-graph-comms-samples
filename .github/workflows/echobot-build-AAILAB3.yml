@@ -1,4 +1,4 @@
-name: .NET BOT D1 BUILD AAILAB
+name: .NET BOT D1 BUILD AAILAB3
 
 on:
   push:
@@ -6,14 +6,14 @@ on:
       - 'master'
     paths:
       - './Samples/PublicSamples/EchoBot/src/**'
-      - .github/workflows/echobot-build-AAILAB.yml
+      - .github/workflows/echobot-build-AAILAB3.yml
 
   pull_request:
     branches:
       - 'master'
     paths:
       - './Samples/PublicSamples/EchoBot/src/**'
-      - .github/workflows/echobot-build-AAILAB.yml
+      - .github/workflows/echobot-build-AAILAB3.yml
 
   workflow_dispatch:
 
@@ -23,8 +23,8 @@ env:
   Component:   EchoBot
   BuildName:   0.1.${{ github.run_number }}
   Environment: D1
-  OrgName:     AAILAB
-  Location:    SoutheastAsia
+  OrgName:     AAILAB3
+  Location:    NorthEurope
 
 jobs:
   build:
@@ -36,34 +36,34 @@ jobs:
 
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v1
-
+    
     - name: Navigate to Workspace
       run: cd $GITHUB_WORKSPACE
 
     - name: Run pwsh
       shell: pwsh
-      run: |
+      run: | 
         echo "${{ env.Base }}/${{ env.Component }}/${{ env.BuildName }}/"
     - uses: nuget/setup-nuget@v1
     - run: nuget restore Samples\PublicSamples\EchoBot\src\EchoBot.sln
-
+    
     - name: Create Build Directory
       run: mkdir ${{ env.Base }}/${{ env.Component }}/${{ env.BuildName }}/
-
+    
     - name: Build Solution
       run: |
         msbuild.exe Samples\PublicSamples\EchoBot\src\EchoBot.sln /nologo /p:platform="x64" /p:OutDir=${{ github.workspace }}/${{ env.Base }}/${{ env.Component }}/${{ env.BuildName }}/
-
+        
     - name: Run pwsh
       shell: pwsh
-      run: |
+      run: | 
         Get-ChildItem -Path ${{ github.workspace }}\${{ env.Base }}\${{ env.Component }}\${{ env.BuildName }}\
         echo ${{ github.workspace }}
-
+    
     - name: Login via Az module
       uses: azure/login@v2
       with:
-        creds: ${{ secrets.AZURE_CREDENTIALS_AAILAB_BOT }}
+        creds: ${{ secrets.AZURE_CREDENTIALS_AAILAB3_BOT }}
         enable-AzPSSession: true
 
     - name: G1_RG_UploadArtifacts_to_Blob
@@ -101,5 +101,6 @@ jobs:
           }
           & ./Samples/PublicSamples/EchoBot/ADF/release-az/Update-AzBuildMetaData.ps1 @Params
         azPSVersion: latest
+
 
 
