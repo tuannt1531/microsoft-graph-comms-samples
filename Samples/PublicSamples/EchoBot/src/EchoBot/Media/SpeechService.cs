@@ -45,7 +45,8 @@ namespace EchoBot.Media
             if (!_isRunning)
             {
                 Start();
-                await ProcessSpeech();
+                // await ProcessSpeech();
+                await ProcessBiDirectionalSpeech();
             }
 
             try
@@ -105,6 +106,151 @@ namespace EchoBot.Media
             {
                 _isRunning = true;
             }
+        }
+
+        private async Task ProcessBiDirectionalSpeech()
+        {
+            try
+            {
+                var setting = _redisService.GetSettings(_callId);
+                Dictionary<string, List<string>> languageSettingMapping = new Dictionary<string, List<string>>();
+                languageSettingMapping["vi"] = new List<string> { "vi-VN", "vi-VN-HoaiMyNeural" };
+                languageSettingMapping["en"] = new List<string> { "en-US", "en-US-JennyNeural" };
+                // ... add more language mappings as needed
+
+                var stopRecognition = new TaskCompletionSource<int>();
+
+                var v2EndpointInString = $"wss://eastus.stt.speech.microsoft.com/speech/universal/v2";
+                var v2EndpointUrl = new Uri(v2EndpointInString);
+
+                // Configure TranslationRecognizer for Source -> Target (e.g., Vietnamese to English)
+                var translationConfigSourceToTarget = SpeechTranslationConfig.FromEndpoint(v2EndpointUrl, _speechConfig.SubscriptionKey);
+                var translationConfigTargetToSource = SpeechTranslationConfig.FromEndpoint(v2EndpointUrl, _speechConfig.SubscriptionKey);
+
+                if (setting != null)
+                {
+                    translationConfigSourceToTarget.SpeechRecognitionLanguage = languageSettingMapping[setting.SourceLanguage][0];
+                    translationConfigSourceToTarget.AddTargetLanguage(setting.TargetLanguage);
+                    translationConfigSourceToTarget.VoiceName = languageSettingMapping[setting.TargetLanguage][1];
+
+                    translationConfigTargetToSource.SpeechRecognitionLanguage = languageSettingMapping[setting.TargetLanguage][0];
+                    translationConfigTargetToSource.AddTargetLanguage(setting.SourceLanguage);
+                    translationConfigTargetToSource.VoiceName = languageSettingMapping[setting.SourceLanguage][1];
+                }
+                else
+                {
+                    // Default language settings if no specific settings are found
+                    translationConfigSourceToTarget.SpeechRecognitionLanguage = "vi-VN";
+                    translationConfigSourceToTarget.AddTargetLanguage("en");
+                    translationConfigSourceToTarget.VoiceName = "en-US-JennyNeural";
+
+                    translationConfigTargetToSource.SpeechRecognitionLanguage = "en-US";
+                    translationConfigTargetToSource.AddTargetLanguage("vi");
+                    translationConfigTargetToSource.VoiceName = "vi-VN-HoaiMyNeural";
+                }
+
+                translationConfigSourceToTarget.SetProperty(PropertyId.SpeechServiceConnection_LanguageIdMode, "Continuous");
+                translationConfigTargetToSource.SetProperty(PropertyId.SpeechServiceConnection_LanguageIdMode, "Continuous");
+
+                using (var audioInput = AudioConfig.FromStreamInput(_audioInputStream))
+                {
+                    var recognizerSourceToTarget = new TranslationRecognizer(translationConfigSourceToTarget, audioInput);
+                    var recognizerTargetToSource = new TranslationRecognizer(translationConfigTargetToSource, audioInput);
+
+                    recognizerSourceToTarget.Recognizing += (s, e) =>
+                    {
+                        _logger.LogInformation($"[Source -> Target] RECOGNIZING: {e.Result.Text}");
+                        foreach (var element in e.Result.Translations)
+                        {
+                            _logger.LogInformation($"[Source -> Target] TRANSLATING into '{element.Key}': {element.Value}");
+                        }
+                    };
+
+                    recognizerSourceToTarget.Recognized += async (s, e) =>
+                    {
+                        if (e.Result.Reason == ResultReason.TranslatedSpeech)
+                        {
+                            foreach (var element in e.Result.Translations)
+                            {
+                                _logger.LogInformation($"[Source -> Target] TRANSLATED into '{element.Key}': {element.Value}");
+                                await TextToSpeech(element.Value);
+                            }
+                        }
+                    };
+
+                    recognizerTargetToSource.Recognizing += (s, e) =>
+                    {
+                        _logger.LogInformation($"[Target -> Source] RECOGNIZING: {e.Result.Text}");
+                        foreach (var element in e.Result.Translations)
+                        {
+                            _logger.LogInformation($"[Target -> Source] TRANSLATING into '{element.Key}': {element.Value}");
+                        }
+                    };
+
+                    recognizerTargetToSource.Recognized += async (s, e) =>
+                    {
+                        if (e.Result.Reason == ResultReason.TranslatedSpeech)
+                        {
+                            foreach (var element in e.Result.Translations)
+                            {
+                                _logger.LogInformation($"[Target -> Source] TRANSLATED into '{element.Key}': {element.Value}");
+                                await TextToSpeech(element.Value);
+                            }
+                        }
+                    };
+
+                    // Handle session events and cancellation for both recognizers
+                    recognizerSourceToTarget.Canceled += (s, e) =>
+                    {
+                        _logger.LogInformation($"[Source -> Target] CANCELED: Reason={e.Reason}");
+                        stopRecognition.TrySetResult(0);
+                    };
+
+                    recognizerTargetToSource.Canceled += (s, e) =>
+                    {
+                        _logger.LogInformation($"[Target -> Source] CANCELED: Reason={e.Reason}");
+                        stopRecognition.TrySetResult(0);
+                    };
+
+                    recognizerSourceToTarget.SessionStarted += (s, e) =>
+                    {
+                        _logger.LogInformation("[Source -> Target] Session started.");
+                    };
+
+                    recognizerTargetToSource.SessionStarted += (s, e) =>
+                    {
+                        _logger.LogInformation("[Target -> Source] Session started.");
+                    };
+
+                    recognizerSourceToTarget.SessionStopped += (s, e) =>
+                    {
+                        _logger.LogInformation("[Source -> Target] Session stopped.");
+                        stopRecognition.TrySetResult(0);
+                    };
+
+                    recognizerTargetToSource.SessionStopped += (s, e) =>
+                    {
+                        _logger.LogInformation("[Target -> Source] Session stopped.");
+                        stopRecognition.TrySetResult(0);
+                    };
+
+                    // Start both recognizers
+                    await recognizerSourceToTarget.StartContinuousRecognitionAsync().ConfigureAwait(false);
+                    await recognizerTargetToSource.StartContinuousRecognitionAsync().ConfigureAwait(false);
+
+                    Task.WaitAny(new[] { stopRecognition.Task });
+
+                    // Stop both recognizers
+                    await recognizerSourceToTarget.StopContinuousRecognitionAsync().ConfigureAwait(false);
+                    await recognizerTargetToSource.StopContinuousRecognitionAsync().ConfigureAwait(false);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Caught Exception");
+            }
+
+            _isDraining = false;
         }
 
         private async Task ProcessSpeech()
