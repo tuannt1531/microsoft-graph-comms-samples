@@ -231,7 +231,8 @@ namespace EchoBot.Media
 
                     var detectedLanguage = e.Result.Properties.GetProperty(PropertyId.SpeechServiceConnection_AutoDetectSourceLanguageResult);
                     _logger.LogInformation($"{recognizerLabel} detectedLanguage: {detectedLanguage} - sourceLanguage {sourceLanguage}");
-                    if (detectedLanguage == sourceLanguage) {
+                    if (detectedLanguage == sourceLanguage)
+                    {
                         foreach (var element in e.Result.Translations)
                         {
                             _logger.LogInformation($"{recognizerLabel} TRANSLATING into '{element.Key}': {element.Value}");
@@ -285,22 +286,26 @@ namespace EchoBot.Media
                 //string serviceRegion = "eastus";
                 //string endpointString = "wss://eastus.stt.speech.microsoft.com/speech/universal/v2";
 
-                if (setting != null) {
+                if (setting != null)
+                {
                     translationConfig.SpeechRecognitionLanguage = languageSettingMapping[setting.SourceLanguage][0];
                     translationConfig.AddTargetLanguage(setting.TargetLanguage);
                     translationConfig.VoiceName = languageSettingMapping[setting.TargetLanguage][1];
-                }else {
+                }
+                else
+                {
                     translationConfig.SpeechRecognitionLanguage = "vi-VN";
                     translationConfig.AddTargetLanguage("en");
                     translationConfig.VoiceName = "en-US-JennyNeural";
                 }
-                
+
                 //translationConfig.EndpointId = endpointString;
                 translationConfig.SetProperty(PropertyId.SpeechServiceConnection_LanguageIdMode, "Continuous");
 
                 // Tạo cấu hình tự động phát hiện ngôn ngữ
                 var autoDetectSourceLanguageConfig = AutoDetectSourceLanguageConfig.FromLanguages(new string[] { "vi-VN", "en-US" });
-                if (setting != null) {
+                if (setting != null)
+                {
                     autoDetectSourceLanguageConfig = AutoDetectSourceLanguageConfig.FromLanguages(new string[] { languageSettingMapping[setting.SourceLanguage][0], languageSettingMapping[setting.TargetLanguage][0] });
                 }
 
@@ -337,7 +342,8 @@ namespace EchoBot.Media
 
                             //// Chỉ thực hiện Text-to-Speech nếu ngôn ngữ phát hiện được là tiếng Việt
                             var sourceLanguage = "vi-VN";
-                            if (setting != null) {
+                            if (setting != null)
+                            {
                                 _logger.LogInformation($">>>setting: {setting.SourceLanguage} {setting.TargetLanguage}");
                                 sourceLanguage = languageSettingMapping[setting.SourceLanguage][0];
                             }
