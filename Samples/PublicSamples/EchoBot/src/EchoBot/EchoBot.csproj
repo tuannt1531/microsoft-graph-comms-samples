@@ -23,5 +23,7 @@
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.7.0" />
     <!-- Redis package -->
     <PackageReference Include="StackExchange.Redis" Version="2.6.90" />
+    <!-- Add the Azure OpenAI Client Library -->
+    <PackageReference Include="Azure.AI.OpenAI" Version="2.0.0" />
   </ItemGroup>
 </Project>

@@ -4,6 +4,10 @@ using Microsoft.CognitiveServices.Speech.Translation;
 using Microsoft.Skype.Bots.Media;
 using Sprache;
 using System.Runtime.InteropServices;
+using Azure.Identity; 
+using Azure;
+using Azure.AI.OpenAI;
+
 
 namespace EchoBot.Media
 {
@@ -122,13 +126,13 @@ namespace EchoBot.Media
                 var setting = _redisService.GetSettings(_callId);
                 var languageSettingMapping = new Dictionary<string, List<string>>
                 {
-                    { "vi", new List<string> { "vi-VN", "vi-VN-HoaiMyNeural" } },
-                    { "en", new List<string> { "en-US", "en-US-JennyNeural" } },
-                    { "fr", new List<string> { "fr-FR", "fr-FR-DeniseNeural" } },
-                    { "zh", new List<string> { "zh-CN", "zh-CN-XiaoxiaoNeural" } },
-                    { "es", new List<string> { "es-ES", "es-ES-ElviraNeural" } },
-                    { "de", new List<string> { "de-DE", "de-DE-KatjaNeural" } },
-                    { "ja", new List<string> { "ja-JP", "ja-JP-AoiNeural" } }
+                    { "vi", new List<string> { "vi-VN", "vi-VN-HoaiMyNeural", "vietnamese" } },
+                    { "en", new List<string> { "en-US", "en-US-JennyNeural", "english" } },
+                    { "fr", new List<string> { "fr-FR", "fr-FR-DeniseNeural", "french" } },
+                    { "zh", new List<string> { "zh-CN", "zh-CN-XiaoxiaoNeural", "chinese" } },
+                    { "es", new List<string> { "es-ES", "es-ES-ElviraNeural", "spanish" } },
+                    { "de", new List<string> { "de-DE", "de-DE-KatjaNeural", "german" } },
+                    { "ja", new List<string> { "ja-JP", "ja-JP-AoiNeural", "japanese" } }
                 };
 
                 var stopRecognition1 = new TaskCompletionSource<int>();
@@ -136,54 +140,42 @@ namespace EchoBot.Media
 
                 var v2EndpointUrl = new Uri($"wss://eastus.stt.speech.microsoft.com/speech/universal/v2");
 
-                var translationConfig1 = SpeechTranslationConfig.FromEndpoint(v2EndpointUrl, _speechConfig.SubscriptionKey);
-                var translationConfig2 = SpeechTranslationConfig.FromEndpoint(v2EndpointUrl, _speechConfig.SubscriptionKey);
+                // Configure STT for each direction
+                var speechConfig1 = SpeechConfig.FromEndpoint(v2EndpointUrl, _speechConfig.SubscriptionKey);
+                var speechConfig2 = SpeechConfig.FromEndpoint(v2EndpointUrl, _speechConfig.SubscriptionKey);
 
                 if (setting != null)
                 {
-                    translationConfig1.SpeechRecognitionLanguage = languageSettingMapping[setting.SourceLanguage][0];
-                    translationConfig1.AddTargetLanguage(setting.TargetLanguage);
-                    translationConfig1.VoiceName = languageSettingMapping[setting.TargetLanguage][1];
-
-                    translationConfig2.SpeechRecognitionLanguage = languageSettingMapping[setting.TargetLanguage][0];
-                    translationConfig2.AddTargetLanguage(setting.SourceLanguage);
-                    translationConfig2.VoiceName = languageSettingMapping[setting.SourceLanguage][1];
+                    speechConfig1.SpeechRecognitionLanguage = languageSettingMapping[setting.SourceLanguage][0];
+                    speechConfig2.SpeechRecognitionLanguage = languageSettingMapping[setting.TargetLanguage][0];
                 }
                 else
                 {
-                    translationConfig1.SpeechRecognitionLanguage = "vi-VN";
-                    translationConfig1.AddTargetLanguage("en");
-                    translationConfig1.VoiceName = "en-US-JennyNeural";
-
-                    translationConfig2.SpeechRecognitionLanguage = "en-US";
-                    translationConfig2.AddTargetLanguage("vi");
-                    translationConfig2.VoiceName = "vi-VN-HoaiMyNeural";
+                    speechConfig1.SpeechRecognitionLanguage = "vi-VN";
+                    speechConfig2.SpeechRecognitionLanguage = "en-US";
                 }
 
-                translationConfig1.SetProperty(PropertyId.SpeechServiceConnection_LanguageIdMode, "Continuous");
-                translationConfig2.SetProperty(PropertyId.SpeechServiceConnection_LanguageIdMode, "Continuous");
-
-                var autoDetectSourceLanguageConfig = AutoDetectSourceLanguageConfig.FromLanguages(new string[] { "vi-VN", "en-US" });
-                if (setting != null)
-                {
-                    autoDetectSourceLanguageConfig = AutoDetectSourceLanguageConfig.FromLanguages(new string[] { languageSettingMapping[setting.SourceLanguage][0], languageSettingMapping[setting.TargetLanguage][0] });
-                }
+                var autoDetectSourceLanguageConfig1 = AutoDetectSourceLanguageConfig.FromLanguages(new string[] { languageSettingMapping[setting.SourceLanguage][0] });
+                var autoDetectSourceLanguageConfig2 = AutoDetectSourceLanguageConfig.FromLanguages(new string[] { languageSettingMapping[setting.TargetLanguage][0] });
 
                 // Separate audio input instances
                 using var audioInput1 = AudioConfig.FromStreamInput(_audioInputStream);
                 using var audioInput2 = AudioConfig.FromStreamInput(_audioInputStream2);
 
-                _translationRecognizer = new TranslationRecognizer(translationConfig1, autoDetectSourceLanguageConfig, audioInput1);
-                _translationRecognizer2 = new TranslationRecognizer(translationConfig2, autoDetectSourceLanguageConfig, audioInput2);
+                // speechConfig1.SetProperty(PropertyId.SpeechServiceConnection_LanguageIdMode, "Continuous");
+                // speechConfig2.SetProperty(PropertyId.SpeechServiceConnection_LanguageIdMode, "Continuous");
 
-                ConfigureRecognizer(_translationRecognizer, stopRecognition1, languageSettingMapping[setting.SourceLanguage][0], "Recognizer1");
-                ConfigureRecognizer(_translationRecognizer2, stopRecognition2, languageSettingMapping[setting.TargetLanguage][0], "Recognizer2");
+                var recognizer1 = new SpeechRecognizer(speechConfig1, autoDetectSourceLanguageConfig1, audioInput1);
+                var recognizer2 = new SpeechRecognizer(speechConfig2, autoDetectSourceLanguageConfig2, audioInput2);
+
+                ConfigureRecognizer(recognizer1, stopRecognition1, languageSettingMapping[setting.SourceLanguage][0], "Recognizer1");
+                ConfigureRecognizer(recognizer2, stopRecognition2, languageSettingMapping[setting.TargetLanguage][0], "Recognizer2");
 
                 // Start both recognizers in parallel and wait for them to complete
                 var recognitionTasks = new[]
                 {
-                    RunRecognizerAsync(_translationRecognizer, stopRecognition1),
-                    RunRecognizerAsync(_translationRecognizer2, stopRecognition2)
+                    RunRecognizerAsync(recognizer1, stopRecognition1, languageSettingMapping[setting.SourceLanguage][0], languageSettingMapping[setting.TargetLanguage][2]),
+                    RunRecognizerAsync(recognizer2, stopRecognition2, languageSettingMapping[setting.TargetLanguage][0], languageSettingMapping[setting.SourceLanguage][2])
                 };
 
                 await Task.WhenAll(recognitionTasks);
@@ -198,10 +190,29 @@ namespace EchoBot.Media
             }
         }
 
-        private async Task RunRecognizerAsync(TranslationRecognizer recognizer, TaskCompletionSource<int> stopRecognition)
+        private async Task RunRecognizerAsync(SpeechRecognizer recognizer, TaskCompletionSource<int> stopRecognition, string sourceLanguage, string targetLanguage)
         {
             try
             {
+                recognizer.Recognized += async (s, e) =>
+                {
+                    if (e.Result.Reason == ResultReason.RecognizedSpeech)
+                    {
+                        var recognizedText = e.Result.Text;
+                        _logger.LogInformation($">>>RECOGNIZED TEXT: {recognizedText}");
+
+                        // Detect the source language
+                        var detectedLanguage = e.Result.Properties.GetProperty(PropertyId.SpeechServiceConnection_AutoDetectSourceLanguageResult);
+                        _logger.LogInformation($">>>DETECTED LANGUAGE: {detectedLanguage} sourceLanguage {sourceLanguage}");
+                        if (recognizedText != "" && detectedLanguage == sourceLanguage) {
+                            // Step 2: Use Azure OpenAI LLM to translate the recognized text
+                            var translatedText = await TranslateTextUsingAzureOpenAI(recognizedText, targetLanguage);
+                            _logger.LogInformation($">>>TRANSLATED TEXT: {translatedText}");
+                            await TextToSpeech(translatedText);
+                        }
+                    }
+                };
+
                 await recognizer.StartContinuousRecognitionAsync().ConfigureAwait(false);
                 await stopRecognition.Task;  // Wait for the recognition session to complete
                 await recognizer.StopContinuousRecognitionAsync().ConfigureAwait(false);
@@ -212,35 +223,29 @@ namespace EchoBot.Media
             }
         }
 
-        private void ConfigureRecognizer(TranslationRecognizer recognizer, TaskCompletionSource<int> stopRecognition, string sourceLanguage, string recognizerLabel)
+        private async Task<string> TranslateTextUsingAzureOpenAI(string inputText, string targetLanguage)
         {
-            recognizer.Recognizing += (s, e) =>
+            // Set up Azure OpenAI client
+            AzureOpenAIClient azureClient = new AzureOpenAIClient(new Uri("https://tamn-m3nxsxt9-eastus2.cognitiveservices.azure.com/"), new AzureKeyCredential("FQ4txV5FuBvyT8GO2YcaK1eVambFWVSXxr0kioe1DI31NWVvjE5oJQQJ99AKACHYHv6XJ3w3AAAAACOGvuRi"));
+            ChatClient chatClient = azureClient.GetChatClient("gpt-4");
+
+            var chatMessages = new ChatMessage[]
             {
-                _logger.LogInformation($"{recognizerLabel} RECOGNIZING: {e.Result.Text}");
-                foreach (var element in e.Result.Translations)
-                {
-                    _logger.LogInformation($"{recognizerLabel} TRANSLATING into '{element.Key}': {element.Value}");
-                }
+                new SystemChatMessage($"You are a translator assistant that help to translates text into {targetLanguage}. If have no input text, please return empty string."),
+                new UserChatMessage($"Input text: {inputText}")
             };
 
-            recognizer.Recognized += async (s, e) =>
-            {
-                if (e.Result.Reason == ResultReason.TranslatedSpeech)
-                {
-                    _logger.LogInformation($"{recognizerLabel} RECOGNIZED: {e.Result.Text}");
+            // Complete the chat conversation
+            ChatCompletion completion = chatClient.CompleteChat(chatMessages);
 
-                    var detectedLanguage = e.Result.Properties.GetProperty(PropertyId.SpeechServiceConnection_AutoDetectSourceLanguageResult);
-                    _logger.LogInformation($"{recognizerLabel} detectedLanguage: {detectedLanguage} - sourceLanguage {sourceLanguage}");
-                    if (detectedLanguage == sourceLanguage) {
-                        foreach (var element in e.Result.Translations)
-                        {
-                            _logger.LogInformation($"{recognizerLabel} TRANSLATING into '{element.Key}': {element.Value}");
-                            await TextToSpeech(element.Value);
-                        }
-                    }
-                }
-            };
+            var translatedText = completion.Content[0].Text.Trim();
+            _logger.LogInformation($"OpenAIClient TRANSLATED TEXT: {translatedText}");
+            return translatedText;
+        }
 
+        // Configure event handlers for recognizer
+        private void ConfigureRecognizer(SpeechRecognizer recognizer, TaskCompletionSource<int> stopRecognition, string sourceLanguage, string recognizerLabel)
+        {
             recognizer.Canceled += (s, e) =>
             {
                 _logger.LogInformation($"{recognizerLabel} CANCELED: Reason={e.Reason}");
@@ -285,22 +290,26 @@ namespace EchoBot.Media
                 //string serviceRegion = "eastus";
                 //string endpointString = "wss://eastus.stt.speech.microsoft.com/speech/universal/v2";
 
-                if (setting != null) {
+                if (setting != null)
+                {
                     translationConfig.SpeechRecognitionLanguage = languageSettingMapping[setting.SourceLanguage][0];
                     translationConfig.AddTargetLanguage(setting.TargetLanguage);
                     translationConfig.VoiceName = languageSettingMapping[setting.TargetLanguage][1];
-                }else {
+                }
+                else
+                {
                     translationConfig.SpeechRecognitionLanguage = "vi-VN";
                     translationConfig.AddTargetLanguage("en");
                     translationConfig.VoiceName = "en-US-JennyNeural";
                 }
-                
+
                 //translationConfig.EndpointId = endpointString;
                 translationConfig.SetProperty(PropertyId.SpeechServiceConnection_LanguageIdMode, "Continuous");
 
                 // Tạo cấu hình tự động phát hiện ngôn ngữ
                 var autoDetectSourceLanguageConfig = AutoDetectSourceLanguageConfig.FromLanguages(new string[] { "vi-VN", "en-US" });
-                if (setting != null) {
+                if (setting != null)
+                {
                     autoDetectSourceLanguageConfig = AutoDetectSourceLanguageConfig.FromLanguages(new string[] { languageSettingMapping[setting.SourceLanguage][0], languageSettingMapping[setting.TargetLanguage][0] });
                 }
 
@@ -337,7 +346,8 @@ namespace EchoBot.Media
 
                             //// Chỉ thực hiện Text-to-Speech nếu ngôn ngữ phát hiện được là tiếng Việt
                             var sourceLanguage = "vi-VN";
-                            if (setting != null) {
+                            if (setting != null)
+                            {
                                 _logger.LogInformation($">>>setting: {setting.SourceLanguage} {setting.TargetLanguage}");
                                 sourceLanguage = languageSettingMapping[setting.SourceLanguage][0];
                             }
