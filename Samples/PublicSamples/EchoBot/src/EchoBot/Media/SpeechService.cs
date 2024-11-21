@@ -155,8 +155,7 @@ namespace EchoBot.Media
                     speechConfig2.SpeechRecognitionLanguage = "en-US";
                 }
 
-                var autoDetectSourceLanguageConfig1 = AutoDetectSourceLanguageConfig.FromLanguages(new string[] { languageSettingMapping[setting.SourceLanguage][0] });
-                var autoDetectSourceLanguageConfig2 = AutoDetectSourceLanguageConfig.FromLanguages(new string[] { languageSettingMapping[setting.TargetLanguage][0] });
+                var autoDetectSourceLanguageConfig = AutoDetectSourceLanguageConfig.FromLanguages(new string[] { languageSettingMapping[setting.SourceLanguage][0], languageSettingMapping[setting.TargetLanguage][0] });
 
                 // Separate audio input instances
                 using var audioInput1 = AudioConfig.FromStreamInput(_audioInputStream);
@@ -165,11 +164,11 @@ namespace EchoBot.Media
                 // speechConfig1.SetProperty(PropertyId.SpeechServiceConnection_LanguageIdMode, "Continuous");
                 // speechConfig2.SetProperty(PropertyId.SpeechServiceConnection_LanguageIdMode, "Continuous");
 
-                var recognizer1 = new SpeechRecognizer(speechConfig1, autoDetectSourceLanguageConfig1, audioInput1);
-                var recognizer2 = new SpeechRecognizer(speechConfig2, autoDetectSourceLanguageConfig2, audioInput2);
+                var recognizer1 = new SpeechRecognizer(speechConfig1, autoDetectSourceLanguageConfig, audioInput1);
+                var recognizer2 = new SpeechRecognizer(speechConfig2, autoDetectSourceLanguageConfig, audioInput2);
 
-                ConfigureRecognizer(recognizer1, stopRecognition1, languageSettingMapping[setting.SourceLanguage][0], "Recognizer1");
-                ConfigureRecognizer(recognizer2, stopRecognition2, languageSettingMapping[setting.TargetLanguage][0], "Recognizer2");
+                ConfigureRecognizer(recognizer1, stopRecognition1, languageSettingMapping[setting.SourceLanguage][0], languageSettingMapping[setting.SourceLanguage][2], "Recognizer1");
+                ConfigureRecognizer(recognizer2, stopRecognition2, languageSettingMapping[setting.TargetLanguage][0], languageSettingMapping[setting.TargetLanguage][2], "Recognizer2");
 
                 // Start both recognizers in parallel and wait for them to complete
                 var recognitionTasks = new[]
@@ -194,25 +193,6 @@ namespace EchoBot.Media
         {
             try
             {
-                recognizer.Recognized += async (s, e) =>
-                {
-                    if (e.Result.Reason == ResultReason.RecognizedSpeech)
-                    {
-                        var recognizedText = e.Result.Text;
-                        _logger.LogInformation($">>>RECOGNIZED TEXT: {recognizedText}");
-
-                        // Detect the source language
-                        var detectedLanguage = e.Result.Properties.GetProperty(PropertyId.SpeechServiceConnection_AutoDetectSourceLanguageResult);
-                        _logger.LogInformation($">>>DETECTED LANGUAGE: {detectedLanguage} sourceLanguage {sourceLanguage}");
-                        if (recognizedText != "" && detectedLanguage == sourceLanguage) {
-                            // Step 2: Use Azure OpenAI LLM to translate the recognized text
-                            var translatedText = await TranslateTextUsingAzureOpenAI(recognizedText, targetLanguage);
-                            _logger.LogInformation($">>>TRANSLATED TEXT: {translatedText}");
-                            await TextToSpeech(translatedText);
-                        }
-                    }
-                };
-
                 await recognizer.StartContinuousRecognitionAsync().ConfigureAwait(false);
                 await stopRecognition.Task;  // Wait for the recognition session to complete
                 await recognizer.StopContinuousRecognitionAsync().ConfigureAwait(false);
@@ -231,12 +211,12 @@ namespace EchoBot.Media
 
             var chatMessages = new ChatMessage[]
             {
-                new SystemChatMessage($"You are a translator assistant that help to translates text into {targetLanguage}. If have no input text, please return empty string."),
-                new UserChatMessage($"Input text: {inputText}")
+                new SystemChatMessage($"You are a translator assistant that help to translates input text into {targetLanguage}. If have no input text, please return empty string."),
+                new UserChatMessage($"Please translate this text: {inputText} into {targetLanguage}. Only output translated text.")
             };
 
-            // Complete the chat conversation
-            ChatCompletion completion = chatClient.CompleteChat(chatMessages);
+            // Complete the chat conversation GetChatCompletionsAsync
+            ChatCompletion completion = await chatClient.CompleteChatAsync(chatMessages);
 
             var translatedText = completion.Content[0].Text.Trim();
             _logger.LogInformation($"OpenAIClient TRANSLATED TEXT: {translatedText}");
@@ -244,8 +224,32 @@ namespace EchoBot.Media
         }
 
         // Configure event handlers for recognizer
-        private void ConfigureRecognizer(SpeechRecognizer recognizer, TaskCompletionSource<int> stopRecognition, string sourceLanguage, string recognizerLabel)
+        private void ConfigureRecognizer(SpeechRecognizer recognizer, TaskCompletionSource<int> stopRecognition, string sourceLanguage, string targetLanguage, string recognizerLabel)
         {
+            recognizer.Recognizing += (s, e) =>
+            {
+                _logger.LogInformation($">>> {recognizerLabel} RECOGNIZING: Text={e.Result.Text}");
+            };
+
+            recognizer.Recognized += async (s, e) =>
+            {
+                if (e.Result.Reason == ResultReason.RecognizedSpeech)
+                {
+                    var recognizedText = e.Result.Text;
+                    _logger.LogInformation($">>> {recognizerLabel} RECOGNIZED TEXT: {recognizedText}");
+
+                    // Detect the source language
+                    var detectedLanguage = e.Result.Properties.GetProperty(PropertyId.SpeechServiceConnection_AutoDetectSourceLanguageResult);
+                    _logger.LogInformation($">>> {recognizerLabel} DETECTED LANGUAGE: {detectedLanguage} sourceLanguage {sourceLanguage}");
+                    if (recognizedText != "" && detectedLanguage == sourceLanguage) {
+                        // Step 2: Use Azure OpenAI LLM to translate the recognized text
+                        var translatedText = await TranslateTextUsingAzureOpenAI(recognizedText, targetLanguage);
+                        _logger.LogInformation($">>> {recognizerLabel} TRANSLATED TEXT: {translatedText}");
+                        await TextToSpeech(translatedText);
+                    }
+                }
+            };
+
             recognizer.Canceled += (s, e) =>
             {
                 _logger.LogInformation($"{recognizerLabel} CANCELED: Reason={e.Reason}");
