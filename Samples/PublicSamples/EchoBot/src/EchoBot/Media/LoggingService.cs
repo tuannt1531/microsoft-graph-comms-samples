@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Threading.Tasks;
 
 namespace EchoBot.Media
 {
@@ -12,7 +13,7 @@ namespace EchoBot.Media
             _logFilePath = logFilePath;
         }
 
-        public async void Log(string message)
+        public async Task Log(string message)
         {
             string logMessage = $"{message}";
 
