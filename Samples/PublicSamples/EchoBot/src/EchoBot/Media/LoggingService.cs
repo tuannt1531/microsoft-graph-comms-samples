@@ -12,7 +12,7 @@ namespace EchoBot.Media
             _logFilePath = logFilePath;
         }
 
-        public void Log(string message)
+        public async void Log(string message)
         {
             string logMessage = $"{message}";
 

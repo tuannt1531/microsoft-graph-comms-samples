@@ -354,7 +354,7 @@ namespace EchoBot.Media
                     {
                         if (e.Result.Text != "") {
                             _logger.LogInformation($">>> RECOGNIZED: {e.Result.Text}");
-                            _loggingService.Log($"RECOGNIZED: {e.Result.Text}");
+                            await _loggingService.Log($"RECOGNIZED: {e.Result.Text}");
 
                             // Lấy thông tin ngôn ngữ phát hiện được
                             var detectedLanguage = e.Result.Properties.GetProperty(PropertyId.SpeechServiceConnection_AutoDetectSourceLanguageResult);
@@ -369,10 +369,10 @@ namespace EchoBot.Media
                         
                             var translatedText = await TranslateTextUsingAzureOpenAI(e.Result.Text, targetLanguage);
                             _logger.LogInformation($">>> OPENAI translatedText {translatedText}");
-                            _loggingService.Log($"OPENAI TRANSLATED: {translatedText}");
+                            await _loggingService.Log($"OPENAI TRANSLATED: {translatedText}");
                             foreach (var element in e.Result.Translations)
                             {
-                                _loggingService.Log($"AZURE TRANSLATED: {element.Value}");
+                                await _loggingService.Log($"AZURE TRANSLATED: {element.Value}");
                             }
 
                             if (translatedText != "")
