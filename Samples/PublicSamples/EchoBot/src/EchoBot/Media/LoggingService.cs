@@ -21,7 +21,7 @@ namespace EchoBot.Media
                 // Append log message to the file
                 using (StreamWriter writer = new StreamWriter(_logFilePath, append: true))
                 {
-                    writer.WriteLine(logMessage);
+                    await writer.WriteLineAsync(logMessage);
                 }
             }
             catch (Exception ex)
