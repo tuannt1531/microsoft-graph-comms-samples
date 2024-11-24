@@ -8,7 +8,7 @@ namespace EchoBot.Media
     {
         private readonly string _logFilePath;
 
-        public LoggingService(string logFilePath = "logfile.txt")
+        public LoggingService(string logFileName = "logfile.txt")
         {
             var logDirectory = "aaibotlogs";
             // Ensure the logs directory exists
