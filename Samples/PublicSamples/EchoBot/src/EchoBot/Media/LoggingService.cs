@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 
-namespace EchoBot.Bot
+namespace EchoBot.Media
 {
     public class LoggingService
     {
