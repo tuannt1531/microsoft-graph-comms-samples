@@ -1,12 +1,19 @@
 using System;
 using System.IO;
 using System.Threading.Tasks;
+using System.Text.RegularExpressions;
 
 namespace EchoBot.Media
 {
     public class LoggingService
     {
         private readonly string _logFilePath;
+
+        private string SanitizeFileName(string fileName)
+        {
+            // Replace invalid characters (:, /, \, ., etc.) with _
+            return Regex.Replace(fileName, @"[:\/\\\.]", "_");
+        }
 
         public LoggingService(string logFileName = "logfile.txt")
         {
@@ -18,6 +25,7 @@ namespace EchoBot.Media
             }
 
             // Set the full log file path
+            logFileName = SanitizeFileName(logFileName);
             _logFilePath = Path.Combine(logDirectory, logFileName);
         }
 
