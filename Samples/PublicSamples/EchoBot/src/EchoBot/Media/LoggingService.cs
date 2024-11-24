@@ -17,7 +17,7 @@ namespace EchoBot.Media
 
         public LoggingService(string logFileName = "logfile.txt")
         {
-            var logDirectory = "aaibotlogs";
+            var logDirectory = @"C:\API\EchoBot\aaibotlogs";
             // Ensure the logs directory exists
             if (!Directory.Exists(logDirectory))
             {
