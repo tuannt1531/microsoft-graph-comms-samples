@@ -48,7 +48,7 @@ namespace EchoBot.Media
             _callId = callId;
             _redisService = new RedisService(settings.RedisConnection);
             _openAIKey = settings.OpenAIKey;
-            _loggingService = new LoggingService($"{callId}.txt")
+            _loggingService = new LoggingService($"{callId}.txt");
         }
 
         public async Task AppendAudioBuffer(AudioMediaBuffer audioBuffer)
@@ -225,7 +225,7 @@ namespace EchoBot.Media
         {
             var stopwatch = System.Diagnostics.Stopwatch.StartNew(); // Start measuring time
 
-            ChatClient client = new(model: "gpt-4o", apiKey: );
+            ChatClient client = new(model: "gpt-4o", apiKey: _openAIKey);
 
             ChatCompletion completion = client.CompleteChat($"Please translate this text into {targetLanguage}: '{inputText}'. Please output only translated text. IF have no result, please output empty.");
             var translatedText =  completion.Content[0].Text.Trim();
@@ -352,31 +352,35 @@ namespace EchoBot.Media
                 {
                     if (e.Result.Reason == ResultReason.TranslatedSpeech)
                     {
-                        _logger.LogInformation($">>> RECOGNIZED: {e.Result.Text}");
-                        _loggingService.Log($"RECOGNIZED: {e.Result.Text}")
+                        if (e.Result.Text != "") {
+                            _logger.LogInformation($">>> RECOGNIZED: {e.Result.Text}");
+                            _loggingService.Log($"RECOGNIZED: {e.Result.Text}");
 
-                        // Lấy thông tin ngôn ngữ phát hiện được
-                        var detectedLanguage = e.Result.Properties.GetProperty(PropertyId.SpeechServiceConnection_AutoDetectSourceLanguageResult);
-                        _logger.LogInformation($">>> Detected Language: {detectedLanguage}");
+                            // Lấy thông tin ngôn ngữ phát hiện được
+                            var detectedLanguage = e.Result.Properties.GetProperty(PropertyId.SpeechServiceConnection_AutoDetectSourceLanguageResult);
+                            _logger.LogInformation($">>> Detected Language: {detectedLanguage}");
 
-                        var targetLanguage = languageSettingMapping[setting.TargetLanguage][2];
-                        if (detectedLanguage == languageSettingMapping[setting.TargetLanguage][0]) {
-                            targetLanguage = languageSettingMapping[setting.SourceLanguage][2];
+                            var targetLanguage = languageSettingMapping[setting.TargetLanguage][2];
+                            if (detectedLanguage == languageSettingMapping[setting.TargetLanguage][0]) {
+                                targetLanguage = languageSettingMapping[setting.SourceLanguage][2];
+                            }
+
+                            _logger.LogInformation($">>> OPENAI TRANSLATING into {targetLanguage}");
+                        
+                            var translatedText = await TranslateTextUsingAzureOpenAI(e.Result.Text, targetLanguage);
+                            _logger.LogInformation($">>> OPENAI translatedText {translatedText}");
+                            _loggingService.Log($"OPENAI TRANSLATED: {translatedText}");
+                            foreach (var element in e.Result.Translations)
+                            {
+                                _loggingService.Log($"AZURE TRANSLATED: {element.Value}");
+                            }
+
+                            if (translatedText != "")
+                            {
+                                await TextToSpeech(translatedText);
+                            }
                         }
-
-                        _logger.LogInformation($">>> OPENAI TRANSLATING into {targetLanguage}");
-                        var translatedText = await TranslateTextUsingAzureOpenAI(e.Result.Text, targetLanguage);
-                        _logger.LogInformation($">>> OPENAI translatedText {translatedText}");
-                        _loggingService.Log($"OPENAI TRANSLATED: {translatedText}")
-                        foreach (var element in e.Result.Translations)
-                        {
-                            _loggingService.Log($"AZURE TRANSLATED: {element.Value}")
-                        }
-
-                        if (translatedText != "")
-                        {
-                            await TextToSpeech(translatedText);
-                        }
+                        
                     }
                 };
 
