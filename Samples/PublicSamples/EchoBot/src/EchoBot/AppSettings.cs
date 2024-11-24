@@ -110,6 +110,12 @@ namespace EchoBot
         /// </summary>
         [Required]
         public string RedisConnection { get; set; }      
+
+        /// <summary>
+        /// Redis connection
+        /// </summary>
+        [Required]
+        public string OpenAIKey { get; set; }      
     }
 }
 
