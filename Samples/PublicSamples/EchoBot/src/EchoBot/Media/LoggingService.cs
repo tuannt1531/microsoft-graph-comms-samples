@@ -10,7 +10,14 @@ namespace EchoBot.Media
 
         public LoggingService(string logFilePath = "logfile.txt")
         {
-            _logFilePath = logFilePath;
+            // Ensure the logs directory exists
+            if (!Directory.Exists("aaibotlogs"))
+            {
+                Directory.CreateDirectory(logDirectory);
+            }
+
+            // Set the full log file path
+            _logFilePath = Path.Combine(logDirectory, logFileName);
         }
 
         public async Task Log(string message)
