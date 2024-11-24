@@ -10,8 +10,9 @@ namespace EchoBot.Media
 
         public LoggingService(string logFilePath = "logfile.txt")
         {
+            var logDirectory = "aaibotlogs"
             // Ensure the logs directory exists
-            if (!Directory.Exists("aaibotlogs"))
+            if (!Directory.Exists(logDirectory))
             {
                 Directory.CreateDirectory(logDirectory);
             }
