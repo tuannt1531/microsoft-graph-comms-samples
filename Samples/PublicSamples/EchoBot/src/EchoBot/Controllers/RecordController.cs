@@ -53,7 +53,7 @@ namespace EchoBot.Controllers
             {
                 _logger.LogInformation($"Setting {recordSetting}");
                 var record = _redisService.GetRecord(recordSetting.MeetingId);
-                recordSetting.Record = !record.Record
+                recordSetting.Record = !record.Record;
                 _redisService.SaveRecord(recordSetting.MeetingId, recordSetting);
                 return Ok();
             }
