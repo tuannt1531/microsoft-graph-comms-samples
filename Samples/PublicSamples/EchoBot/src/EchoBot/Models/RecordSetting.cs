@@ -19,7 +19,7 @@ namespace EchoBot.Models
         /// Record bot setup
         /// </summary>
         /// <value>Record setup.</value>
-        public bool? Record { get; set; } = false;
+        public bool Record { get; set; } = false;
     }
 }
 
