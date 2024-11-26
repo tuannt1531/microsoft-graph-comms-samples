@@ -285,6 +285,12 @@ namespace EchoBot.Media
         {
             try
             {
+                var recordSetting = _redisService.GetRecord(_callId);
+                if (!recordSetting.Record) { // do not process anything if not start recording
+                    _isDraining = false;
+                    return;
+                }
+
                 var setting = _redisService.GetSettings(_callId);
                 var languageSettingMapping = new Dictionary<string, List<string>>
                 {
