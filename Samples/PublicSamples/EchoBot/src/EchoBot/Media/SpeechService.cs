@@ -206,7 +206,6 @@ namespace EchoBot.Media
 
                 _translationRecognizer.Recognized += async (s, e) =>
                 {
-                    _logger.LogInformation($">>> recordSetting: {recordSetting.Record}");
                     if (e.Result.Reason == ResultReason.TranslatedSpeech)
                     {
                         if (e.Result.Text != "") {
