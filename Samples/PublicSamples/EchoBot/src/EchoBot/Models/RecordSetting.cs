@@ -20,6 +20,8 @@ namespace EchoBot.Models
         /// </summary>
         /// <value>Record setup.</value>
         public bool Record { get; set; } = false;
+
+        public string? UserId { get; set; }
     }
 }
 

@@ -253,25 +253,9 @@ namespace EchoBot.Bot
         private void OnDominantSpeakerChanged(object sender, DominantSpeakerChangedEventArgs e)
         {
             // Get the dominant speaker's index
-            _logger.LogInformation($">>>Dominant Speaker e.CurrentDominantSpeaker: {e.CurrentDominantSpeaker}");
             int dominantSpeakerIndex =(int)e.CurrentDominantSpeaker;
-
-            // Log the dominant speaker's index
             _logger.LogInformation($">>>Dominant Speaker Index: {dominantSpeakerIndex}");
-
-            // // Map the dominant speaker index to a participant
-            // var participants = this.GetParticipants();
-            // var participant = participants[dominantSpeakerIndex];
-
-            // if (participant != null)
-            // {
-            //     // Log the dominant speaker's display name
-            //     _logger.LogInformation($"Current Dominant Speaker: {participant.Resource.Info.Identity.User.DisplayName}");
-            // }
-            // else
-            // {
-            //     _logger.LogInformation("Dominant speaker index does not match any participant.");
-            // }
+            _logger.LogInformation($">>>participant: {this.participants.Count}");
         }
 
         private void OnSendMediaBuffer(object? sender, Media.MediaStreamEventArgs e)
