@@ -39,8 +39,6 @@ namespace EchoBot.Media
             _speechConfig = SpeechConfig.FromSubscription(settings.SpeechConfigKey, settings.SpeechConfigRegion);
             _speechConfig.SpeechSynthesisLanguage = settings.BotLanguage;
             _speechConfig.SpeechRecognitionLanguage = settings.BotLanguage;
-            //_speechConfig.SpeechSynthesisLanguage = "vi";
-            //_speechConfig.SpeechRecognitionLanguage = "vi";
 
             var audioConfig = AudioConfig.FromStreamOutput(_audioOutputStream);
             _synthesizer = new SpeechSynthesizer(_speechConfig, audioConfig);
@@ -57,7 +55,6 @@ namespace EchoBot.Media
             {
                 Start();
                 await ProcessSpeech();
-                // await ProcessBiDirectionalSpeech();
             }
 
             try
@@ -124,103 +121,6 @@ namespace EchoBot.Media
             }
         }
 
-        private async Task ProcessBiDirectionalSpeech()
-        {
-            try
-            {
-                var setting = _redisService.GetSettings(_callId);
-                var languageSettingMapping = new Dictionary<string, List<string>>
-                {
-                    { "vi", new List<string> { "vi-VN", "vi-VN-HoaiMyNeural", "vietnamese" } },
-                    { "en", new List<string> { "en-US", "en-US-JennyNeural", "english" } },
-                    { "fr", new List<string> { "fr-FR", "fr-FR-DeniseNeural", "french" } },
-                    { "zh", new List<string> { "zh-CN", "zh-CN-XiaoxiaoNeural", "chinese" } },
-                    { "es", new List<string> { "es-ES", "es-ES-ElviraNeural", "spanish" } },
-                    { "de", new List<string> { "de-DE", "de-DE-KatjaNeural", "german" } },
-                    { "ja", new List<string> { "ja-JP", "ja-JP-AoiNeural", "japanese" } }
-                };
-
-                var stopRecognition1 = new TaskCompletionSource<int>();
-                var stopRecognition2 = new TaskCompletionSource<int>();
-
-                var v2EndpointUrl = new Uri($"wss://eastus.stt.speech.microsoft.com/speech/universal/v2");
-
-                var translationConfig1 = SpeechTranslationConfig.FromEndpoint(v2EndpointUrl, _speechConfig.SubscriptionKey);
-                var translationConfig2 = SpeechTranslationConfig.FromEndpoint(v2EndpointUrl, _speechConfig.SubscriptionKey);
-
-                if (setting != null)
-                {
-                    translationConfig1.SpeechRecognitionLanguage = languageSettingMapping[setting.SourceLanguage][0];
-                    translationConfig1.AddTargetLanguage(setting.TargetLanguage);
-                    translationConfig1.VoiceName = languageSettingMapping[setting.TargetLanguage][1];
-
-                    translationConfig2.SpeechRecognitionLanguage = languageSettingMapping[setting.TargetLanguage][0];
-                    translationConfig2.AddTargetLanguage(setting.SourceLanguage);
-                    translationConfig2.VoiceName = languageSettingMapping[setting.SourceLanguage][1];
-                }
-                else
-                {
-                    translationConfig1.SpeechRecognitionLanguage = "vi-VN";
-                    translationConfig1.AddTargetLanguage("en");
-                    translationConfig1.VoiceName = "en-US-JennyNeural";
-
-                    translationConfig2.SpeechRecognitionLanguage = "en-US";
-                    translationConfig2.AddTargetLanguage("vi");
-                    translationConfig2.VoiceName = "vi-VN-HoaiMyNeural";
-                }
-
-                translationConfig1.SetProperty(PropertyId.SpeechServiceConnection_LanguageIdMode, "Continuous");
-                translationConfig2.SetProperty(PropertyId.SpeechServiceConnection_LanguageIdMode, "Continuous");
-
-                var autoDetectSourceLanguageConfig = AutoDetectSourceLanguageConfig.FromLanguages(new string[] { "vi-VN", "en-US" });
-                if (setting != null)
-                {
-                    autoDetectSourceLanguageConfig = AutoDetectSourceLanguageConfig.FromLanguages(new string[] { languageSettingMapping[setting.SourceLanguage][0], languageSettingMapping[setting.TargetLanguage][0] });
-                }
-
-                // Separate audio input instances
-                using var audioInput1 = AudioConfig.FromStreamInput(_audioInputStream);
-                using var audioInput2 = AudioConfig.FromStreamInput(_audioInputStream2);
-
-                _translationRecognizer = new TranslationRecognizer(translationConfig1, autoDetectSourceLanguageConfig, audioInput1);
-                _translationRecognizer2 = new TranslationRecognizer(translationConfig2, autoDetectSourceLanguageConfig, audioInput2);
-
-                ConfigureRecognizer(_translationRecognizer, stopRecognition1, languageSettingMapping[setting.SourceLanguage][0], languageSettingMapping[setting.TargetLanguage][2], "Recognizer1");
-                ConfigureRecognizer(_translationRecognizer2, stopRecognition2, languageSettingMapping[setting.TargetLanguage][0], languageSettingMapping[setting.SourceLanguage][2], "Recognizer2");
-
-                // Start both recognizers in parallel and wait for them to complete
-                var recognitionTasks = new[]
-                {
-                    RunRecognizerAsync(_translationRecognizer, stopRecognition1),
-                    RunRecognizerAsync(_translationRecognizer2, stopRecognition2)
-                };
-
-                await Task.WhenAll(recognitionTasks);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Caught Exception during ProcessBiDirectionalSpeech.");
-            }
-            finally
-            {
-                _isDraining = false;
-            }
-        }
-
-        private async Task RunRecognizerAsync(TranslationRecognizer recognizer, TaskCompletionSource<int> stopRecognition)
-        {
-            try
-            {
-                await recognizer.StartContinuousRecognitionAsync().ConfigureAwait(false);
-                await stopRecognition.Task;  // Wait for the recognition session to complete
-                await recognizer.StopContinuousRecognitionAsync().ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error occurred in RunRecognizerAsync.");
-            }
-        }
-
         private async Task<string> TranslateTextUsingAzureOpenAI(string inputText, string targetLanguage)
         {
             var stopwatch = System.Diagnostics.Stopwatch.StartNew(); // Start measuring time
@@ -236,50 +136,6 @@ namespace EchoBot.Media
             return translatedText;
         }
 
-        private void ConfigureRecognizer(TranslationRecognizer recognizer, TaskCompletionSource<int> stopRecognition, string sourceLanguage, string targetLanguage, string recognizerLabel)
-        {
-            recognizer.Recognized += async (s, e) =>
-            {
-                if (e.Result.Reason == ResultReason.TranslatedSpeech)
-                {
-                    _logger.LogInformation($"{recognizerLabel} RECOGNIZED: {e.Result.Text}");
-
-                    var detectedLanguage = e.Result.Properties.GetProperty(PropertyId.SpeechServiceConnection_AutoDetectSourceLanguageResult);
-                    _logger.LogInformation($"{recognizerLabel} detectedLanguage: {detectedLanguage} - sourceLanguage {sourceLanguage}");
-                    if (detectedLanguage == sourceLanguage)
-                    {
-                        foreach (var element in e.Result.Translations)
-                        {
-                            _logger.LogInformation($"    {recognizerLabel} Translation: {element.Value}");
-                            // await TextToSpeech(element.Value);
-                        }
-                        _logger.LogInformation($"???    {recognizerLabel} Origin: {e.Result.Text}");
-                        if (e.Result.Text != "") {
-                            var translatedText = await TranslateTextUsingAzureOpenAI(e.Result.Text, targetLanguage);
-                            _logger.LogInformation($"    {recognizerLabel} OpenAI: {translatedText}");
-                            await TextToSpeech(translatedText);
-                        }
-                    }
-                }
-            };
-
-            recognizer.Canceled += (s, e) =>
-            {
-                _logger.LogInformation($"{recognizerLabel} CANCELED: Reason={e.Reason}");
-                if (e.Reason == CancellationReason.Error)
-                {
-                    _logger.LogInformation($"ErrorDetails={e.ErrorDetails}");
-                }
-                stopRecognition.TrySetResult(0);
-            };
-
-            recognizer.SessionStarted += (s, e) => _logger.LogInformation($"{recognizerLabel} Session started.");
-            recognizer.SessionStopped += (s, e) =>
-            {
-                _logger.LogInformation($"{recognizerLabel} Session stopped.");
-                stopRecognition.TrySetResult(0);
-            };
-        }
 
         private async Task ProcessSpeech()
         {
@@ -350,40 +206,36 @@ namespace EchoBot.Media
 
                 _translationRecognizer.Recognized += async (s, e) =>
                 {
-                    var recordSetting = _redisService.GetRecord(_callId);
                     _logger.LogInformation($">>> recordSetting: {recordSetting.Record}");
-                    if (recordSetting.Record) { // do not process anything if not start recording
-                        if (e.Result.Reason == ResultReason.TranslatedSpeech)
-                        {
-                            if (e.Result.Text != "") {
-                                _logger.LogInformation($">>> RECOGNIZED: {e.Result.Text}");
-                                await _loggingService.Log($"RECOGNIZED: {e.Result.Text}");
+                    if (e.Result.Reason == ResultReason.TranslatedSpeech)
+                    {
+                        if (e.Result.Text != "") {
+                            _logger.LogInformation($">>> RECOGNIZED: {e.Result.Text}");
+                            await _loggingService.Log($"RECOGNIZED: {e.Result.Text}");
 
-                                // Lấy thông tin ngôn ngữ phát hiện được
-                                var detectedLanguage = e.Result.Properties.GetProperty(PropertyId.SpeechServiceConnection_AutoDetectSourceLanguageResult);
-                                _logger.LogInformation($">>> Detected Language: {detectedLanguage}");
+                            // Lấy thông tin ngôn ngữ phát hiện được
+                            var detectedLanguage = e.Result.Properties.GetProperty(PropertyId.SpeechServiceConnection_AutoDetectSourceLanguageResult);
+                            _logger.LogInformation($">>> Detected Language: {detectedLanguage}");
 
-                                var targetLanguage = languageSettingMapping[setting.TargetLanguage][2];
-                                if (detectedLanguage == languageSettingMapping[setting.TargetLanguage][0]) {
-                                    targetLanguage = languageSettingMapping[setting.SourceLanguage][2];
-                                }
-
-                                _logger.LogInformation($">>> OPENAI TRANSLATING into {targetLanguage}");
-                            
-                                var translatedText = await TranslateTextUsingAzureOpenAI(e.Result.Text, targetLanguage);
-                                _logger.LogInformation($">>> OPENAI translatedText {translatedText}");
-                                await _loggingService.Log($"OPENAI TRANSLATED: {translatedText}");
-                                foreach (var element in e.Result.Translations)
-                                {
-                                    await _loggingService.Log($"AZURE TRANSLATED: {element.Value}");
-                                }
-
-                                if (translatedText != "")
-                                {
-                                    await TextToSpeech(translatedText);
-                                }
+                            var targetLanguage = languageSettingMapping[setting.TargetLanguage][2];
+                            if (detectedLanguage == languageSettingMapping[setting.TargetLanguage][0]) {
+                                targetLanguage = languageSettingMapping[setting.SourceLanguage][2];
                             }
-                            
+
+                            _logger.LogInformation($">>> OPENAI TRANSLATING into {targetLanguage}");
+                        
+                            var translatedText = await TranslateTextUsingAzureOpenAI(e.Result.Text, targetLanguage);
+                            _logger.LogInformation($">>> OPENAI translatedText {translatedText}");
+                            await _loggingService.Log($"OPENAI TRANSLATED: {translatedText}");
+                            foreach (var element in e.Result.Translations)
+                            {
+                                await _loggingService.Log($"AZURE TRANSLATED: {element.Value}");
+                            }
+
+                            if (translatedText != "")
+                            {
+                                await TextToSpeech(translatedText);
+                            }
                         }
                     }
                 };

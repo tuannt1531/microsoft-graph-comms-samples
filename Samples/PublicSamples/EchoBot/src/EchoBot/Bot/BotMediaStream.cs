@@ -52,6 +52,9 @@ namespace EchoBot.Bot
         private int shutdown;
         private readonly SpeechService _languageService;
 
+        private RedisService _redisService;
+        private string _callId;
+
         /// <summary>
         /// Initializes a new instance of the <see cref="BotMediaStream" /> class.
         /// </summary>
@@ -95,11 +98,16 @@ namespace EchoBot.Bot
 
             this._audioSocket.AudioMediaReceived += this.OnAudioMediaReceived;
 
+            this._audioSocket.DominantSpeakerChanged += OnDominantSpeakerChanged;
+
             if (_settings.UseSpeechService)
             {
                 _languageService = new SpeechService(_settings, _logger, callId);
                 _languageService.SendMediaBuffer += this.OnSendMediaBuffer;
             }
+
+            _redisService = new RedisService(_settings.RedisConnection);
+            _callId = callId;
         }
 
         /// <summary>
@@ -209,7 +217,10 @@ namespace EchoBot.Bot
                 {
                     // send audio buffer to language service for processing
                     // the particpant talking will hear the bot repeat what they said
-                    await _languageService.AppendAudioBuffer(e.Buffer);
+                    var recordSetting = _redisService.GetRecord(_callId);
+                    if (recordSetting.Record) { // do not process anything if not start recording
+                        await _languageService.AppendAudioBuffer(e.Buffer);
+                    }
                     e.Buffer.Dispose();
                 }
                 else
@@ -237,6 +248,30 @@ namespace EchoBot.Bot
             {
                 e.Buffer.Dispose();
             }
+        }
+
+        private void OnDominantSpeakerChanged(object sender, DominantSpeakerChangedEventArgs e)
+        {
+            // Get the dominant speaker's index
+            _logger.LogInformation($">>>Dominant Speaker e.CurrentDominantSpeaker: {e.CurrentDominantSpeaker}");
+            int dominantSpeakerIndex =(int)e.CurrentDominantSpeaker;
+
+            // Log the dominant speaker's index
+            _logger.LogInformation($">>>Dominant Speaker Index: {dominantSpeakerIndex}");
+
+            // // Map the dominant speaker index to a participant
+            // var participants = this.GetParticipants();
+            // var participant = participants[dominantSpeakerIndex];
+
+            // if (participant != null)
+            // {
+            //     // Log the dominant speaker's display name
+            //     _logger.LogInformation($"Current Dominant Speaker: {participant.Resource.Info.Identity.User.DisplayName}");
+            // }
+            // else
+            // {
+            //     _logger.LogInformation("Dominant speaker index does not match any participant.");
+            // }
         }
 
         private void OnSendMediaBuffer(object? sender, Media.MediaStreamEventArgs e)
