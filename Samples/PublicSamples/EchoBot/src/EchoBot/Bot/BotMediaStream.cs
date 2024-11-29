@@ -54,6 +54,7 @@ namespace EchoBot.Bot
 
         private RedisService _redisService;
         private string _callId;
+        private string _dominantSpeakerId;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="BotMediaStream" /> class.
@@ -219,7 +220,9 @@ namespace EchoBot.Bot
                     // the particpant talking will hear the bot repeat what they said
                     var recordSetting = _redisService.GetRecord(_callId);
                     if (recordSetting.Record) { // do not process anything if not start recording
-                        await _languageService.AppendAudioBuffer(e.Buffer);
+                        if (recordSetting.UserId == _dominantSpeakerId) {
+                            await _languageService.AppendAudioBuffer(e.Buffer);
+                        }
                     }
                     e.Buffer.Dispose();
                 }
@@ -253,9 +256,34 @@ namespace EchoBot.Bot
         private void OnDominantSpeakerChanged(object sender, DominantSpeakerChangedEventArgs e)
         {
             // Get the dominant speaker's index
-            int dominantSpeakerIndex =(int)e.CurrentDominantSpeaker;
-            _logger.LogInformation($">>>Dominant Speaker Index: {dominantSpeakerIndex}");
-            _logger.LogInformation($">>>participant: {this.participants.Count}");
+            uint dominantSpeakerMsi = e.CurrentDominantSpeaker;
+
+            // Check if the MSI indicates "no speaker"
+            if (dominantSpeakerMsi == 0xFFFFFFFF) // None
+            {
+                return;
+            }
+
+            string dominantSpeakerMsiString = dominantSpeakerMsi.ToString();
+            // Find the participant with the matching MSI
+            var dominantParticipant = this.GetParticipants().FirstOrDefault(participant =>
+            {
+                var mediaStreams = participant.Resource.MediaStreams;
+                return mediaStreams.Any(stream => stream.SourceId == dominantSpeakerMsiString);
+            });
+
+            if (dominantParticipant != null)
+            {
+                var user = dominantParticipant.Resource.Info.Identity.User;
+                if (user != null)
+                {
+                    string userId = user.Id; // User ID
+                    string displayName = user.DisplayName; // Display Name
+                    _dominantSpeakerId = user.Id;
+                    _logger.LogInformation($">>>Dominant userId: {userId}");
+                    _logger.LogInformation($">>>Dominant displayName: {displayName}");
+                }
+            }
         }
 
         private void OnSendMediaBuffer(object? sender, Media.MediaStreamEventArgs e)
