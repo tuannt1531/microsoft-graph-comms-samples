@@ -90,7 +90,7 @@ namespace EchoBot.Bot
 
             this.participants = new List<IParticipant>();
 
-            this.mediaFrameSourceComponent = new MediaFrameSourceComponent(pipeline, callHandler, _logger);
+            this.mediaFrameSourceComponent = new MediaFrameSourceComponent(pipeline, callHandler, _logger, callId, settings);
 
             this.audioSendStatusActive = new TaskCompletionSource<bool>();
             this.startVideoPlayerCompleted = new TaskCompletionSource<bool>();

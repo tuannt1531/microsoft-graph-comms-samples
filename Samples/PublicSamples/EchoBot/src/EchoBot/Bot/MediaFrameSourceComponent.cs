@@ -47,7 +47,7 @@ namespace PsiBot.Services.Bot
         /// <param name="pipeline">Pipeline in which this component lives.</param>
         /// <param name="callHandler">Call handler.</param>
         /// <param name="logger">Graph logger.</param>
-        public MediaFrameSourceComponent(Pipeline pipeline, CallHandler callHandler, IGraphLogger logger)
+        public MediaFrameSourceComponent(Pipeline pipeline, CallHandler callHandler, IGraphLogger logger, string callId, AppSettings settings)
         {
             this.pipeline = pipeline;
             this.callHandler = callHandler;
@@ -56,6 +56,11 @@ namespace PsiBot.Services.Bot
 
             this.Audio = this.pipeline.CreateEmitter<Dictionary<string, (AudioBuffer, DateTime)>>(this, nameof(this.Audio));
             this.Video = this.pipeline.CreateEmitter<Dictionary<string, (Shared<Image>, DateTime)>>(this, nameof(this.Video));
+
+             _languageService = new SpeechService(settings, logger, callId);
+            _languageService.SendMediaBuffer += this.OnSendMediaBuffer;
+            _redisService = new RedisService(settings.RedisConnection);
+            _callId = callId;
         }
 
         /// <summary>
@@ -96,6 +101,8 @@ namespace PsiBot.Services.Bot
                 return;
             }
 
+            var recordSetting = _redisService.GetRecord(_callId);
+
             var audioFormat = audioFrame.AudioFormat == Microsoft.Skype.Bots.Media.AudioFormat.Pcm44KStereo ?
                 Microsoft.Psi.Audio.WaveFormat.Create16BitPcm(44000, 2) :
                 Microsoft.Psi.Audio.WaveFormat.Create16kHz1Channel16BitPcm();
@@ -117,6 +124,13 @@ namespace PsiBot.Services.Bot
                     {
                         
                         buffers.Add(identity.Id, (new AudioBuffer(data, audioFormat), audioFrameTimestamp));
+
+                        if (recordSetting.Record) {
+                            if (identity.Id == recordSetting.UserId) {
+                                this.logger.Info($">>>>> Translate...");
+                                await _languageService.AppendAudioBuffer(buffer);
+                            }
+                        }
                     }
                     else
                     {
