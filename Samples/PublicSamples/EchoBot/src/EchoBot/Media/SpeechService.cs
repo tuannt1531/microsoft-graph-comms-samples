@@ -223,18 +223,21 @@ namespace EchoBot.Media
 
                             _logger.LogInformation($">>> OPENAI TRANSLATING into {targetLanguage}");
                         
-                            var translatedText = await TranslateTextUsingAzureOpenAI(e.Result.Text, targetLanguage);
-                            _logger.LogInformation($">>> OPENAI translatedText {translatedText}");
-                            await _loggingService.Log($"OPENAI TRANSLATED: {translatedText}");
+                            // var translatedText = await TranslateTextUsingAzureOpenAI(e.Result.Text, targetLanguage);
+                            // _logger.LogInformation($">>> OPENAI translatedText {translatedText}");
+                            // await _loggingService.Log($"OPENAI TRANSLATED: {translatedText}");
                             foreach (var element in e.Result.Translations)
                             {
                                 await _loggingService.Log($"AZURE TRANSLATED: {element.Value}");
+                                if (element.Value != "") {
+                                    await TextToSpeech(element.Value);
+                                }
                             }
 
-                            if (translatedText != "")
-                            {
-                                await TextToSpeech(translatedText);
-                            }
+                            // if (translatedText != "")
+                            // {
+                            //     await TextToSpeech(translatedText);
+                            // }
                         }
                     }
                 };

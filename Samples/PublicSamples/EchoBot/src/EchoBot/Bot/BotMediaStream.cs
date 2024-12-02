@@ -50,11 +50,12 @@ namespace EchoBot.Bot
         private AudioVideoFramePlayerSettings audioVideoFramePlayerSettings;
         private List<AudioMediaBuffer> audioMediaBuffers = new List<AudioMediaBuffer>();
         private int shutdown;
-        private readonly SpeechService _languageService;
-
-        private RedisService _redisService;
-        private string _callId;
-        private string _dominantSpeakerId;
+        private readonly MediaFrameSourceComponent mediaFrameSourceComponent;
+        private int shutdown;
+        private MediaSendStatus videoMediaSendStatus = MediaSendStatus.Inactive;
+        private MediaSendStatus vbssMediaSendStatus = MediaSendStatus.Inactive;
+        private MediaSendStatus audioSendStatus = MediaSendStatus.Inactive;
+        private readonly ILocalMediaSession mediaSession;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="BotMediaStream" /> class.
@@ -67,6 +68,10 @@ namespace EchoBot.Bot
         /// <exception cref="InvalidOperationException">A mediaSession needs to have at least an audioSocket</exception>
         public BotMediaStream(
             ILocalMediaSession mediaSession,
+            CallHandler callHandler,
+            Pipeline pipeline, 
+            ITeamsBot teamsBot, 
+            Exporter exporter,
             string callId,
             IGraphLogger graphLogger,
             ILogger logger,
@@ -81,7 +86,11 @@ namespace EchoBot.Bot
             _settings = settings;
             _logger = logger;
 
+            this.mediaSession = mediaSession;
+
             this.participants = new List<IParticipant>();
+
+            this.mediaFrameSourceComponent = new MediaFrameSourceComponent(pipeline, callHandler, _logger);
 
             this.audioSendStatusActive = new TaskCompletionSource<bool>();
             this.startVideoPlayerCompleted = new TaskCompletionSource<bool>();
@@ -109,6 +118,35 @@ namespace EchoBot.Bot
 
             _redisService = new RedisService(_settings.RedisConnection);
             _callId = callId;
+
+            this.mediaFrameSourceComponent.Audio.Parallel(
+                    (id, stream) =>
+                    {
+                        // Extract and persist audio streams with the original timestamps for each buffer
+                        stream.Process<(AudioBuffer, DateTime), AudioBuffer>((tuple, _, emitter) =>
+                        {
+                            (var audioBuffer, var originatingTime) = tuple;
+                            if (originatingTime > emitter.LastEnvelope.OriginatingTime)
+                            {
+                                // Out-of-order messages are ignored
+                                emitter.Post(audioBuffer, originatingTime);
+                            }
+                        }).Write($"Participants.{id}.Audio", exporter);
+                    },
+                    branchTerminationPolicy: BranchTerminationPolicy<string, (AudioBuffer, DateTime)>.Never(),
+                    name: "PersistParticipantAudio");
+            teamsBot.AudioOut?.Write("Bot.Audio", exporter);
+            this.mediaFrameSourceComponent.Audio.PipeTo(teamsBot.AudioIn);
+            teamsBot.AudioOut?.Do(buffer =>
+            {
+                if (this.audioSendStatus == MediaSendStatus.Active && teamsBot.EnableAudioOutput)
+                {
+                    IntPtr unmanagedPointer = Marshal.AllocHGlobal(buffer.Length);
+                    Marshal.Copy(buffer.Data, 0, unmanagedPointer, buffer.Length);
+                    this.SendAudio(new AudioSendBuffer(unmanagedPointer, buffer.Length, AudioFormat.Pcm16K));
+                    Marshal.FreeHGlobal(unmanagedPointer);
+                }
+            });
         }
 
         /// <summary>
@@ -119,6 +157,24 @@ namespace EchoBot.Bot
         {
             return participants;
         }
+
+        /// <inheritdoc/>   
+        protected override void Dispose(bool disposing)
+        {
+            // Event Dispose of the bot media stream object
+            base.Dispose(disposing);
+
+            if (Interlocked.CompareExchange(ref this.shutdown, 1, 1) == 1)
+            {
+                return;
+            }
+
+            if (this.audioSocket != null)
+            {
+                this.audioSocket.AudioSendStatusChanged -= this.OnAudioSendStatusChanged;
+                this.audioSocket.AudioMediaReceived -= this.OnAudioMediaReceived;
+            }
+        }        
 
         /// <summary>
         /// Shut down.
@@ -193,12 +249,8 @@ namespace EchoBot.Bot
         /// <param name="e">Event arguments.</param>
         private void OnAudioSendStatusChanged(object? sender, AudioSendStatusChangedEventArgs e)
         {
-            _logger.LogTrace($"[AudioSendStatusChangedEventArgs(MediaSendStatus={e.MediaSendStatus})]");
-
-            if (e.MediaSendStatus == MediaSendStatus.Active)
-            {
-                this.audioSendStatusActive.TrySetResult(true);
-            }
+            _logger.Info($"[AudioSendStatusChangedEventArgs(MediaSendStatus={e.MediaSendStatus})]");
+            this.audioSendStatus = e.MediaSendStatus;
         }
 
         /// <summary>
@@ -208,44 +260,14 @@ namespace EchoBot.Bot
         /// <param name="e">The audio media received arguments.</param>
         private async void OnAudioMediaReceived(object? sender, AudioMediaReceivedEventArgs e)
         {
-            _logger.LogTrace($"Received Audio: [AudioMediaReceivedEventArgs(Data=<{e.Buffer.Data.ToString()}>, Length={e.Buffer.Length}, Timestamp={e.Buffer.Timestamp})]");
-
             try
             {
-                if (!startVideoPlayerCompleted.Task.IsCompleted) { return; }
-
-                if (_languageService != null)
-                {
-                    // send audio buffer to language service for processing
-                    // the particpant talking will hear the bot repeat what they said
-                    var recordSetting = _redisService.GetRecord(_callId);
-                    if (recordSetting.Record) { // do not process anything if not start recording
-                        if (recordSetting.UserId == _dominantSpeakerId) {
-                            await _languageService.AppendAudioBuffer(e.Buffer);
-                        }
-                    }
-                    e.Buffer.Dispose();
-                }
-                else
-                {
-                    // send audio buffer back on the audio socket
-                    // the particpant talking will hear themselves
-                    var length = e.Buffer.Length;
-                    if (length > 0)
-                    {
-                        var buffer = new byte[length];
-                        Marshal.Copy(e.Buffer.Data, buffer, 0, (int)length);
-
-                        var currentTick = DateTime.Now.Ticks;
-                        this.audioMediaBuffers = Util.Utilities.CreateAudioMediaBuffers(buffer, currentTick, _logger);
-                        await this.audioVideoFramePlayer.EnqueueBuffersAsync(this.audioMediaBuffers, new List<VideoMediaBuffer>());
-                    }
-                }
+                this.mediaFrameSourceComponent.Received(e.Buffer);
+                e.Buffer.Dispose();
             }
             catch (Exception ex)
             {
-                this.GraphLogger.Error(ex);
-                _logger.LogError(ex, "OnAudioMediaReceived error");
+                this.logger.Error(ex);
             }
             finally
             {
@@ -253,43 +275,21 @@ namespace EchoBot.Bot
             }
         }
 
-        private void OnDominantSpeakerChanged(object sender, DominantSpeakerChangedEventArgs e)
+        /// <summary>
+        /// Sends an <see cref="AudioMediaBuffer"/> to the call from the Bot's audio feed.
+        /// </summary>
+        /// <param name="buffer">The audio buffer to send.</param>
+        private void SendAudio(AudioMediaBuffer buffer)
         {
-            // Get the dominant speaker's index
-            uint dominantSpeakerMsi = e.CurrentDominantSpeaker;
-
-            // Check if the MSI indicates "no speaker"
-            if (dominantSpeakerMsi == 0xFFFFFFFF) // None
+            // Send the audio to our outgoing video stream
+            try
             {
-                return;
+                this.audioSocket.Send(buffer);
             }
-
-            string dominantSpeakerMsiString = dominantSpeakerMsi.ToString();
-            // Find the participant with the matching MSI
-            var dominantParticipant = this.GetParticipants().FirstOrDefault(participant =>
+            catch (Exception ex)
             {
-                var mediaStreams = participant.Resource.MediaStreams;
-                return mediaStreams.Any(stream => stream.SourceId == dominantSpeakerMsiString);
-            });
-
-            if (dominantParticipant != null)
-            {
-                var user = dominantParticipant.Resource.Info.Identity.User;
-                if (user != null)
-                {
-                    string userId = user.Id; // User ID
-                    string displayName = user.DisplayName; // Display Name
-                    _dominantSpeakerId = user.Id;
-                    _logger.LogInformation($">>>Dominant userId: {userId}");
-                    _logger.LogInformation($">>>Dominant displayName: {displayName}");
-                }
+                this.logger.Error(ex, $"[OnAudioReceived] Exception while calling audioSocket.Send()");
             }
-        }
-
-        private void OnSendMediaBuffer(object? sender, Media.MediaStreamEventArgs e)
-        {
-            this.audioMediaBuffers = e.AudioMediaBuffers;
-            var result = Task.Run(async () => await this.audioVideoFramePlayer.EnqueueBuffersAsync(this.audioMediaBuffers, new List<VideoMediaBuffer>())).GetAwaiter();
         }
     }
 }
